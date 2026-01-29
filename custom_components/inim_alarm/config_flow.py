@@ -170,6 +170,25 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
         self._scenarios: list[dict[str, Any]] = []
 
+    def _find_scenario_by_name(self, name: str, default: int) -> int:
+        """Find scenario ID by name."""
+        for scenario in self._scenarios:
+            if name.upper() in scenario.get("Name", "").upper():
+                return scenario.get("ScenarioId", default)
+        # If not found, return first scenario ID or default
+        if self._scenarios:
+            return self._scenarios[0].get("ScenarioId", default)
+        return default
+
+    def _find_first_partial_scenario(self, default: int) -> int:
+        """Find first partial scenario (not TOTALE or SPENTO)."""
+        for scenario in self._scenarios:
+            name = scenario.get("Name", "").upper()
+            if name not in ("TOTALE", "SPENTO"):
+                return scenario.get("ScenarioId", default)
+        # If not found, return default
+        return default
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -184,8 +203,8 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 if devices:
                     self._scenarios = devices[0].get("scenarios", [])
 
-        # Build scenario options for dropdown
-        scenario_options = {-1: "Auto-detect"}
+        # Build scenario options for dropdown (no auto-detect)
+        scenario_options = {}
         for scenario in self._scenarios:
             scenario_id = scenario.get("ScenarioId")
             scenario_name = scenario.get("Name", f"Scenario {scenario_id}")
@@ -195,12 +214,23 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get current values
+        # Get current values with reasonable defaults
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
-        current_arm_away = self.config_entry.options.get(CONF_ARM_AWAY_SCENARIO, -1)
-        current_arm_home = self.config_entry.options.get(CONF_ARM_HOME_SCENARIO, -1)
-        current_disarm = self.config_entry.options.get(CONF_DISARM_SCENARIO, -1)
         current_user_code = self.config_entry.options.get(CONF_USER_CODE, "")
+        
+        # Default scenarios: try to find TOTALE (0), SPENTO (1), and first partial (2)
+        default_arm_away = self.config_entry.options.get(
+            CONF_ARM_AWAY_SCENARIO, 
+            self._find_scenario_by_name("TOTALE", 0)
+        )
+        default_disarm = self.config_entry.options.get(
+            CONF_DISARM_SCENARIO, 
+            self._find_scenario_by_name("SPENTO", 1)
+        )
+        default_arm_home = self.config_entry.options.get(
+            CONF_ARM_HOME_SCENARIO, 
+            self._find_first_partial_scenario(2)
+        )
 
         options_schema = vol.Schema(
             {
@@ -210,15 +240,15 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
                 vol.Required(
                     CONF_ARM_AWAY_SCENARIO,
-                    default=current_arm_away,
+                    default=default_arm_away,
                 ): vol.In(scenario_options),
                 vol.Required(
                     CONF_ARM_HOME_SCENARIO,
-                    default=current_arm_home,
+                    default=default_arm_home,
                 ): vol.In(scenario_options),
                 vol.Required(
                     CONF_DISARM_SCENARIO,
-                    default=current_disarm,
+                    default=default_disarm,
                 ): vol.In(scenario_options),
                 vol.Optional(
                     CONF_USER_CODE,

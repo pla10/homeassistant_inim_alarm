@@ -50,7 +50,7 @@ SCENARIO_DISARMED = 1   # Disarm all
 MANUFACTURER = "INIM Electronics"
 
 # Platforms
-PLATFORMS = ["alarm_control_panel", "binary_sensor", "sensor"]
+PLATFORMS = ["alarm_control_panel", "binary_sensor", "button", "sensor", "switch"]
 
 # Attributes
 ATTR_DEVICE_ID = "device_id"
