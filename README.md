@@ -146,6 +146,29 @@ automation:
           entity_id: alarm_control_panel.your_alarm
 ```
 
+## Security & Privacy
+
+🔒 **Your credentials are safe:**
+
+- **Credentials stay local** - Your email and password are stored only in your Home Assistant instance (in `.storage/` encrypted files)
+- **No third-party servers** - This integration communicates directly with INIM Cloud servers only, no data is sent anywhere else
+- **No credential logging** - Passwords and tokens are never written to logs
+- **HTTPS only** - All communication with INIM Cloud uses encrypted HTTPS connections
+
+### How it works
+
+1. Your credentials are entered once during setup via Home Assistant's secure config flow
+2. Home Assistant stores them encrypted in its internal storage
+3. The integration uses them only to authenticate with INIM Cloud
+4. A session token (valid for 24 hours) is obtained and used for subsequent API calls
+5. Tokens are refreshed automatically when they expire
+
+### Best Practices
+
+- Use a dedicated INIM Cloud account if you're concerned about security
+- Regularly check Home Assistant logs for any unusual activity
+- Keep your Home Assistant installation up to date
+
 ## Troubleshooting
 
 ### Cannot connect to INIM Cloud

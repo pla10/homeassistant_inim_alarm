@@ -76,6 +76,7 @@ class InimApi:
         req_json = json.dumps(request_data, separators=(",", ":"))
         url = f"{API_BASE_URL}?req={quote(req_json)}"
         
+        # Log only method name, never credentials or tokens
         _LOGGER.debug("API Request: %s", request_data.get("Method"))
         
         try:
