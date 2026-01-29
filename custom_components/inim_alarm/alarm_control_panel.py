@@ -27,6 +27,7 @@ from .const import (
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
+    CONF_SCAN_INTERVAL,
     DOMAIN,
     MANUFACTURER,
     SCENARIO_DISARMED,
@@ -194,6 +195,13 @@ class InimAlarmControlPanel(
         # Default to armed_away if scenario is unknown but not disarmed
         return AlarmControlPanelState.ARMED_AWAY
 
+    def _get_scenario_name(self, scenario_id: int) -> str:
+        """Get scenario name by ID."""
+        for scenario in self._scenarios:
+            if scenario.get("ScenarioId") == scenario_id:
+                return scenario.get("Name", f"Scenario {scenario_id}")
+        return f"Scenario {scenario_id}"
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
@@ -203,16 +211,31 @@ class InimAlarmControlPanel(
         
         active_scenario = self.coordinator.get_active_scenario(self._device_id)
         
+        # Get configured values
+        configured_away = self._options.get(CONF_ARM_AWAY_SCENARIO, -1)
+        configured_home = self._options.get(CONF_ARM_HOME_SCENARIO, -1)
+        configured_disarm = self._options.get(CONF_DISARM_SCENARIO, -1)
+        polling_interval = self._options.get(CONF_SCAN_INTERVAL, 30)
+        
         attrs = {
+            # Device info
             ATTR_DEVICE_ID: self._device_id,
             ATTR_SERIAL_NUMBER: device.get("serial_number"),
             ATTR_MODEL: device.get("model"),
             ATTR_FIRMWARE: device.get("firmware"),
             ATTR_VOLTAGE: device.get("voltage"),
+            
+            # Current state
             "active_scenario_id": device.get("active_scenario"),
             "active_scenario_name": active_scenario.get("Name") if active_scenario else None,
             "network_status": device.get("network_status"),
             "faults": device.get("faults"),
+            
+            # Configuration
+            "polling_interval_seconds": polling_interval,
+            "configured_arm_away": self._get_scenario_name(self._arm_away_scenario) if configured_away >= 0 else f"Auto ({self._get_scenario_name(self._arm_away_scenario)})",
+            "configured_arm_home": self._get_scenario_name(self._arm_home_scenario) if configured_home >= 0 else f"Auto ({self._get_scenario_name(self._arm_home_scenario)})",
+            "configured_disarm": self._get_scenario_name(self._disarm_scenario) if configured_disarm >= 0 else f"Auto ({self._get_scenario_name(self._disarm_scenario)})",
         }
         
         # Add available scenarios
