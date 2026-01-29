@@ -34,11 +34,7 @@ from .coordinator import InimDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [
-    Platform.ALARM_CONTROL_PANEL,
-    Platform.BINARY_SENSOR,
-    Platform.SENSOR,
-]
+# PLATFORMS imported from const.py includes: alarm_control_panel, binary_sensor, button, sensor, switch
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 30
 
