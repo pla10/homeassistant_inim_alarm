@@ -54,6 +54,7 @@ async def async_setup_entry(
     for device in coordinator.devices:
         device_id = device.get("device_id")
         if device_id:
+            # Main alarm panel (device-level)
             entities.append(
                 InimAlarmControlPanel(
                     coordinator=coordinator,
@@ -63,6 +64,23 @@ async def async_setup_entry(
                     options=options,
                 )
             )
+            
+            # Area-specific alarm panels
+            for area in device.get("areas", []):
+                area_id = area.get("AreaId")
+                area_name = area.get("Name")
+                if area_id is not None and area_name:
+                    entities.append(
+                        InimAreaAlarmControlPanel(
+                            coordinator=coordinator,
+                            api=api,
+                            device_id=device_id,
+                            area_id=area_id,
+                            area_name=area_name,
+                            entry_id=entry.entry_id,
+                            options=options,
+                        )
+                    )
 
     async_add_entities(entities)
 
@@ -269,6 +287,105 @@ class InimAlarmControlPanel(
         _LOGGER.info("Arming away for device %s", self._device_id)
         await self._api.arm_away(self._device_id, self._arm_away_scenario)
         await self.coordinator.async_request_refresh()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class InimAreaAlarmControlPanel(
+    CoordinatorEntity[InimDataUpdateCoordinator], AlarmControlPanelEntity
+):
+    """Representation of an INIM Area-specific Alarm Control Panel."""
+
+    _attr_has_entity_name = True
+    _attr_supported_features = AlarmControlPanelEntityFeature(0)  # Read-only, control via scenarios
+    _attr_code_arm_required = False
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        api: InimApi,
+        device_id: int,
+        area_id: int,
+        area_name: str,
+        entry_id: str,
+        options: dict | None = None,
+    ) -> None:
+        """Initialize the area alarm control panel."""
+        super().__init__(coordinator)
+        self._api = api
+        self._device_id = device_id
+        self._area_id = area_id
+        self._area_name = area_name
+        self._entry_id = entry_id
+        self._options = options or {}
+        self._attr_unique_id = f"{device_id}_area_{area_id}"
+        self._attr_name = area_name
+        self._attr_translation_key = "area_alarm"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+        
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        """Return the state of this area."""
+        area = self.coordinator.get_area(self._device_id, self._area_id)
+        if not area:
+            return None
+        
+        # Check for alarm condition first
+        if area.get("Alarm", False):
+            return AlarmControlPanelState.TRIGGERED
+        
+        # Check armed status
+        # Armed values: 1=armed (totale), 4=disarmed
+        # Partial: other values (2, 3, etc.)
+        armed_status = area.get("Armed", 4)
+        
+        if armed_status == 4:
+            return AlarmControlPanelState.DISARMED
+        elif armed_status == 1:
+            return AlarmControlPanelState.ARMED_AWAY
+        else:
+            # Any other armed state is partial/home
+            return AlarmControlPanelState.ARMED_HOME
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        area = self.coordinator.get_area(self._device_id, self._area_id)
+        if not area:
+            return {}
+        
+        return {
+            "area_id": self._area_id,
+            "area_name": self._area_name,
+            "armed_raw": area.get("Armed"),
+            "alarm": area.get("Alarm"),
+            "alarm_memory": area.get("AlarmMemory"),
+            "tamper": area.get("Tamper"),
+            "tamper_memory": area.get("TamperMemory"),
+            "ready": area.get("Ready"),
+            "fault": area.get("Fault"),
+        }
 
     @callback
     def _handle_coordinator_update(self) -> None:
