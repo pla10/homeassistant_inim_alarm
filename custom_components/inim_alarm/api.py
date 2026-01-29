@@ -14,9 +14,12 @@ import aiohttp
 from .const import (
     API_BASE_URL,
     API_HEADERS,
+    BYPASS_MODE_BYPASS,
+    BYPASS_MODE_NORMAL,
     DEFAULT_CLIENT_NAME,
     METHOD_ACTIVATE_SCENARIO,
     METHOD_GET_DEVICES_EXTENDED,
+    METHOD_INSERT_ZONE,
     METHOD_REGISTER_CLIENT,
     METHOD_REQUEST_POLL,
 )
@@ -241,6 +244,52 @@ class InimApi:
     async def disarm(self, device_id: int, scenario_id: int = 1) -> bool:
         """Disarm the alarm."""
         return await self.activate_scenario(device_id, scenario_id)
+
+    async def bypass_zone(
+        self, device_id: int, zone_id: int, user_code: str, bypass: bool = True
+    ) -> bool:
+        """Bypass or reinstate a zone.
+        
+        Args:
+            device_id: The device ID
+            zone_id: The zone ID to bypass
+            user_code: The user code for the alarm
+            bypass: True to bypass, False to reinstate
+            
+        Returns:
+            True if successful
+        """
+        await self._ensure_authenticated()
+        
+        mode = BYPASS_MODE_BYPASS if bypass else BYPASS_MODE_NORMAL
+        
+        request_data = {
+            "Node": "inimhome",
+            "Name": "it.inim.inimutenti",
+            "ClientIP": "",
+            "Method": METHOD_INSERT_ZONE,
+            "Token": self._token,
+            "ClientId": self._client_id,
+            "Params": {
+                "ZoneId": zone_id,
+                "Mode": mode,
+                "DeviceId": str(device_id),
+                "Code": user_code,
+                "Value": 0,
+            },
+        }
+        
+        try:
+            await self._request(request_data)
+            action = "bypassed" if bypass else "reinstated"
+            _LOGGER.info("Zone %s %s on device %s", zone_id, action, device_id)
+            return True
+        except InimAuthError:
+            # Token expired, re-authenticate and retry
+            await self.authenticate()
+            request_data["Token"] = self._token
+            await self._request(request_data)
+            return True
 
     @property
     def devices(self) -> list[dict[str, Any]]:

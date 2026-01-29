@@ -31,12 +31,40 @@
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
-        "description": "Configura l'intervallo di aggiornamento e gli scenari dell'allarme",
+        "description": "Configura intervallo, scenari e impostazioni bypass",
         "data": {
           "scan_interval": "Intervallo di aggiornamento (secondi)",
           "arm_away_scenario": "Scenario Fuori Casa (totale)",
           "arm_home_scenario": "Scenario In Casa (parziale)",
-          "disarm_scenario": "Scenario Disattivazione"
+          "disarm_scenario": "Scenario Disattivazione",
+          "user_code": "Codice utente (per bypass zone)"
+        },
+        "data_description": {
+          "user_code": "Il tuo codice utente dell'allarme (es. 00800). Necessario per bypassare le zone."
+        }
+      }
+    }
+  },
+  "services": {
+    "bypass_zone": {
+      "name": "Bypassa Zona",
+      "description": "Bypassa o reinserisce una zona nel sistema di allarme",
+      "fields": {
+        "device_id": {
+          "name": "ID Dispositivo",
+          "description": "L'ID del dispositivo INIM"
+        },
+        "zone_id": {
+          "name": "ID Zona",
+          "description": "L'ID della zona da bypassare"
+        },
+        "bypass": {
+          "name": "Bypass",
+          "description": "True per bypassare, false per reinserire"
+        },
+        "user_code": {
+          "name": "Codice Utente",
+          "description": "Il codice utente (se non impostato nelle opzioni)"
         }
       }
     }

@@ -19,6 +19,7 @@ from .const import (
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
     CONF_SCAN_INTERVAL,
+    CONF_USER_CODE,
     DOMAIN,
 )
 
@@ -199,6 +200,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         current_arm_away = self.config_entry.options.get(CONF_ARM_AWAY_SCENARIO, -1)
         current_arm_home = self.config_entry.options.get(CONF_ARM_HOME_SCENARIO, -1)
         current_disarm = self.config_entry.options.get(CONF_DISARM_SCENARIO, -1)
+        current_user_code = self.config_entry.options.get(CONF_USER_CODE, "")
 
         options_schema = vol.Schema(
             {
@@ -218,6 +220,10 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_DISARM_SCENARIO,
                     default=current_disarm,
                 ): vol.In(scenario_options),
+                vol.Optional(
+                    CONF_USER_CODE,
+                    description={"suggested_value": current_user_code},
+                ): str,
             }
         )
 

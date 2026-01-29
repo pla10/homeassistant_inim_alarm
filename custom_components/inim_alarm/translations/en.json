@@ -31,12 +31,40 @@
     "step": {
       "init": {
         "title": "INIM Alarm Options",
-        "description": "Configure polling interval and alarm scenarios",
+        "description": "Configure polling interval, scenarios, and bypass settings",
         "data": {
           "scan_interval": "Update interval (seconds)",
           "arm_away_scenario": "Arm Away scenario (full arm)",
           "arm_home_scenario": "Arm Home scenario (partial arm)",
-          "disarm_scenario": "Disarm scenario"
+          "disarm_scenario": "Disarm scenario",
+          "user_code": "User code (for zone bypass)"
+        },
+        "data_description": {
+          "user_code": "Your alarm user code (e.g., 00800). Required for bypassing zones."
+        }
+      }
+    }
+  },
+  "services": {
+    "bypass_zone": {
+      "name": "Bypass Zone",
+      "description": "Bypass or reinstate a zone in the alarm system",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The ID of the INIM alarm device"
+        },
+        "zone_id": {
+          "name": "Zone ID",
+          "description": "The ID of the zone to bypass"
+        },
+        "bypass": {
+          "name": "Bypass",
+          "description": "True to bypass the zone, false to reinstate it"
+        },
+        "user_code": {
+          "name": "User Code",
+          "description": "The user code for the alarm (if not set in integration options)"
         }
       }
     }

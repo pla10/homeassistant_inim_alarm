@@ -11,6 +11,7 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
 CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
 CONF_DISARM_SCENARIO = "disarm_scenario"
+CONF_USER_CODE = "user_code"
 
 # API
 API_BASE_URL = "https://api.inimcloud.com/"
@@ -27,6 +28,7 @@ METHOD_REGISTER_CLIENT = "RegisterClient"
 METHOD_GET_DEVICES_EXTENDED = "GetDevicesExtended"
 METHOD_ACTIVATE_SCENARIO = "ActivateScenario"
 METHOD_REQUEST_POLL = "RequestPoll"
+METHOD_INSERT_ZONE = "InsertZone"
 
 # Default values
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
@@ -62,3 +64,10 @@ ATTR_VOLTAGE = "voltage"
 ATTR_ALARM_MEMORY = "alarm_memory"
 ATTR_TAMPER_MEMORY = "tamper_memory"
 ATTR_BYPASSED = "bypassed"
+
+# Bypass modes
+BYPASS_MODE_NORMAL = 0    # Reinserisci zona (toglie bypass)
+BYPASS_MODE_BYPASS = 3    # Bypassa zona
+
+# Service names
+SERVICE_BYPASS_ZONE = "bypass_zone"

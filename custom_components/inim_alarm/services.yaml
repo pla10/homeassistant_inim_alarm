@@ -1,0 +1,36 @@
+bypass_zone:
+  name: Bypass Zone
+  description: Bypass or reinstate a zone in the alarm system
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the INIM alarm device
+      required: true
+      example: 248944
+      selector:
+        number:
+          min: 1
+          mode: box
+    zone_id:
+      name: Zone ID
+      description: The ID of the zone to bypass
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          mode: box
+    bypass:
+      name: Bypass
+      description: True to bypass the zone, false to reinstate it
+      required: false
+      default: true
+      selector:
+        boolean:
+    user_code:
+      name: User Code
+      description: The user code for the alarm (if not set in integration options)
+      required: false
+      example: "00800"
+      selector:
+        text:
