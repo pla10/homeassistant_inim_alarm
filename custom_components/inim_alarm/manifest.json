@@ -4,9 +4,9 @@
   "codeowners": ["@pla10"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/pla10/inim_alarm",
+  "documentation": "https://github.com/pla10/homeassistant_inim_alarm",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/pla10/inim_alarm/issues",
+  "issue_tracker": "https://github.com/pla10/homeassistant_inim_alarm/issues",
   "requirements": ["aiohttp>=3.8.0"],
   "version": "1.0.0"
 }

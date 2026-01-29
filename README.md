@@ -1,8 +1,8 @@
 # INIM Alarm Integration for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/pla10/inim_alarm.svg)](https://github.com/pla10/inim_alarm/releases)
-[![License](https://img.shields.io/github/license/pla10/inim_alarm.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/pla10/homeassistant_inim_alarm.svg)](https://github.com/pla10/homeassistant_inim_alarm/releases)
+[![License](https://img.shields.io/github/license/pla10/homeassistant_inim_alarm.svg)](LICENSE)
 
 A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, etc.) via INIM Cloud.
 
@@ -43,7 +43,7 @@ This integration works with INIM alarm panels that are connected to INIM Cloud:
 1. Open HACS in Home Assistant
 2. Click on "Integrations"
 3. Click the three dots menu (top right) → "Custom repositories"
-4. Add this repository URL: `https://github.com/pla10/inim_alarm`
+4. Add this repository URL: `https://github.com/pla10/homeassistant_inim_alarm`
 5. Select category: "Integration"
 6. Click "Add"
 7. Search for "INIM Alarm" and install it
@@ -51,7 +51,7 @@ This integration works with INIM alarm panels that are connected to INIM Cloud:
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub](https://github.com/pla10/inim_alarm/releases)
+1. Download the latest release from [GitHub](https://github.com/pla10/homeassistant_inim_alarm/releases)
 2. Extract and copy the `custom_components/inim_alarm` folder to your Home Assistant `config/custom_components/` directory
 3. Restart Home Assistant
 
