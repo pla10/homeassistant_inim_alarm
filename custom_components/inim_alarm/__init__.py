@@ -18,6 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import InimApi, InimApiError, InimAuthError
 from .const import (
     ATTR_DEVICE_ID,
+    ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
@@ -26,6 +27,7 @@ from .const import (
     CONF_USER_CODE,
     DOMAIN,
     PLATFORMS,
+    SERVICE_ACTIVATE_SCENARIO,
     SERVICE_BYPASS_ZONE,
 )
 from .coordinator import InimDataUpdateCoordinator
@@ -121,6 +123,13 @@ SERVICE_BYPASS_ZONE_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_ACTIVATE_SCENARIO_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.positive_int,
+        vol.Required(ATTR_SCENARIO_ID): vol.Coerce(int),
+    }
+)
+
 
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register services for INIM Alarm."""
@@ -166,4 +175,32 @@ async def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_BYPASS_ZONE,
         handle_bypass_zone,
         schema=SERVICE_BYPASS_ZONE_SCHEMA,
+    )
+
+    async def handle_activate_scenario(call: ServiceCall) -> None:
+        """Handle the activate_scenario service call."""
+        device_id = call.data[ATTR_DEVICE_ID]
+        scenario_id = call.data[ATTR_SCENARIO_ID]
+
+        for entry_id, data in hass.data[DOMAIN].items():
+            api: InimApi = data.get("api")
+            if api:
+                try:
+                    await api.activate_scenario(device_id, scenario_id)
+                    _LOGGER.info("Activated scenario %s on device %s", scenario_id, device_id)
+                    # Refresh data after scenario change
+                    coordinator = data.get("coordinator")
+                    if coordinator:
+                        await coordinator.async_request_refresh()
+                except InimApiError as err:
+                    _LOGGER.error("Failed to activate scenario %s: %s", scenario_id, err)
+                return
+
+        _LOGGER.error("No INIM Alarm API found")
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ACTIVATE_SCENARIO,
+        handle_activate_scenario,
+        schema=SERVICE_ACTIVATE_SCENARIO_SCHEMA,
     )

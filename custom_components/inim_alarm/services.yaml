@@ -34,3 +34,26 @@ bypass_zone:
       example: "00800"
       selector:
         text:
+
+activate_scenario:
+  name: Activate Scenario
+  description: Activate any scenario on the alarm system (arm, disarm, partial, etc.)
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the INIM alarm device
+      required: true
+      example: 248944
+      selector:
+        number:
+          min: 1
+          mode: box
+    scenario_id:
+      name: Scenario ID
+      description: The ID of the scenario to activate (0=TOTALE, 1=SPENTO, 2=PIANO TERRA, etc.)
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          mode: box

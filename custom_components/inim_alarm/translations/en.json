@@ -67,6 +67,20 @@
           "description": "The user code for the alarm (if not set in integration options)"
         }
       }
+    },
+    "activate_scenario": {
+      "name": "Activate Scenario",
+      "description": "Activate any scenario on the alarm system",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "The ID of the INIM alarm device"
+        },
+        "scenario_id": {
+          "name": "Scenario ID",
+          "description": "The ID of the scenario to activate (0=TOTALE, 1=SPENTO, etc.)"
+        }
+      }
     }
   },
   "entity": {

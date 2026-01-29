@@ -67,6 +67,20 @@
           "description": "Il codice utente (se non impostato nelle opzioni)"
         }
       }
+    },
+    "activate_scenario": {
+      "name": "Attiva Scenario",
+      "description": "Attiva qualsiasi scenario del sistema di allarme",
+      "fields": {
+        "device_id": {
+          "name": "ID Dispositivo",
+          "description": "L'ID del dispositivo INIM"
+        },
+        "scenario_id": {
+          "name": "ID Scenario",
+          "description": "L'ID dello scenario da attivare (0=TOTALE, 1=SPENTO, ecc.)"
+        }
+      }
     }
   },
   "entity": {
