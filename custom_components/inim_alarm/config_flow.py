@@ -9,12 +9,18 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
-from .const import DOMAIN
+from .const import (
+    CONF_ARM_AWAY_SCENARIO,
+    CONF_ARM_HOME_SCENARIO,
+    CONF_DISARM_SCENARIO,
+    CONF_SCAN_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +67,14 @@ class InimAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for INIM Alarm."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Create the options flow."""
+        return InimAlarmOptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -146,3 +160,70 @@ class CannotConnect(Exception):
 
 class InvalidAuth(Exception):
     """Error to indicate there is invalid auth."""
+
+
+class InimAlarmOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for INIM Alarm."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+        self._scenarios: list[dict[str, Any]] = []
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        errors: dict[str, str] = {}
+
+        # Get current scenarios from the coordinator
+        if DOMAIN in self.hass.data and self.config_entry.entry_id in self.hass.data[DOMAIN]:
+            coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
+            if coordinator and coordinator.data:
+                devices = coordinator.data.get("devices", [])
+                if devices:
+                    self._scenarios = devices[0].get("scenarios", [])
+
+        # Build scenario options for dropdown
+        scenario_options = {-1: "Auto-detect"}
+        for scenario in self._scenarios:
+            scenario_id = scenario.get("ScenarioId")
+            scenario_name = scenario.get("Name", f"Scenario {scenario_id}")
+            if scenario_id is not None:
+                scenario_options[scenario_id] = scenario_name
+
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current values
+        current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
+        current_arm_away = self.config_entry.options.get(CONF_ARM_AWAY_SCENARIO, -1)
+        current_arm_home = self.config_entry.options.get(CONF_ARM_HOME_SCENARIO, -1)
+        current_disarm = self.config_entry.options.get(CONF_DISARM_SCENARIO, -1)
+
+        options_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_SCAN_INTERVAL,
+                    default=current_scan,
+                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Required(
+                    CONF_ARM_AWAY_SCENARIO,
+                    default=current_arm_away,
+                ): vol.In(scenario_options),
+                vol.Required(
+                    CONF_ARM_HOME_SCENARIO,
+                    default=current_arm_home,
+                ): vol.In(scenario_options),
+                vol.Required(
+                    CONF_DISARM_SCENARIO,
+                    default=current_disarm,
+                ): vol.In(scenario_options),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=options_schema,
+            errors=errors,
+        )

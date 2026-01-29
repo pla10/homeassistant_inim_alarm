@@ -24,6 +24,9 @@ from .const import (
     ATTR_SCENARIO_ID,
     ATTR_SERIAL_NUMBER,
     ATTR_VOLTAGE,
+    CONF_ARM_AWAY_SCENARIO,
+    CONF_ARM_HOME_SCENARIO,
+    CONF_DISARM_SCENARIO,
     DOMAIN,
     MANUFACTURER,
     SCENARIO_DISARMED,
@@ -43,6 +46,7 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator: InimDataUpdateCoordinator = data["coordinator"]
     api: InimApi = data["api"]
+    options: dict = data.get("options", {})
 
     entities = []
     
@@ -55,6 +59,7 @@ async def async_setup_entry(
                     api=api,
                     device_id=device_id,
                     entry_id=entry.entry_id,
+                    options=options,
                 )
             )
 
@@ -80,21 +85,45 @@ class InimAlarmControlPanel(
         api: InimApi,
         device_id: int,
         entry_id: str,
+        options: dict | None = None,
     ) -> None:
         """Initialize the alarm control panel."""
         super().__init__(coordinator)
         self._api = api
         self._device_id = device_id
         self._entry_id = entry_id
+        self._options = options or {}
         self._attr_unique_id = f"{device_id}_alarm"
         
         # Get device info
         device = coordinator.get_device(device_id)
         if device:
             self._scenarios = device.get("scenarios", [])
-            self._arm_away_scenario = self._find_scenario_id("TOTALE", SCENARIO_TOTAL)
-            self._disarm_scenario = self._find_scenario_id("SPENTO", SCENARIO_DISARMED)
-            self._arm_home_scenarios = self._find_partial_scenarios()
+            
+            # Use configured scenarios if set, otherwise auto-detect
+            configured_away = self._options.get(CONF_ARM_AWAY_SCENARIO, -1)
+            configured_home = self._options.get(CONF_ARM_HOME_SCENARIO, -1)
+            configured_disarm = self._options.get(CONF_DISARM_SCENARIO, -1)
+            
+            # Arm Away scenario
+            if configured_away >= 0:
+                self._arm_away_scenario = configured_away
+            else:
+                self._arm_away_scenario = self._find_scenario_id("TOTALE", SCENARIO_TOTAL)
+            
+            # Disarm scenario
+            if configured_disarm >= 0:
+                self._disarm_scenario = configured_disarm
+            else:
+                self._disarm_scenario = self._find_scenario_id("SPENTO", SCENARIO_DISARMED)
+            
+            # Arm Home scenario
+            if configured_home >= 0:
+                self._arm_home_scenario = configured_home
+                self._arm_home_scenarios = [configured_home]
+            else:
+                self._arm_home_scenarios = self._find_partial_scenarios()
+                self._arm_home_scenario = self._arm_home_scenarios[0] if self._arm_home_scenarios else self._arm_away_scenario
 
     def _find_scenario_id(self, name: str, default: int) -> int:
         """Find scenario ID by name or return default."""

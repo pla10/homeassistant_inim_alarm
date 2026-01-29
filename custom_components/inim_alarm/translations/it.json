@@ -10,7 +10,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Ri-autenticazione",
+        "title": "Riautenticazione",
         "description": "Inserisci la nuova password per {username}",
         "data": {
           "password": "Password"
@@ -24,7 +24,21 @@
     },
     "abort": {
       "already_configured": "Account già configurato",
-      "reauth_successful": "Ri-autenticazione completata con successo"
+      "reauth_successful": "Riautenticazione completata"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni INIM Alarm",
+        "description": "Configura l'intervallo di aggiornamento e gli scenari dell'allarme",
+        "data": {
+          "scan_interval": "Intervallo di aggiornamento (secondi)",
+          "arm_away_scenario": "Scenario Fuori Casa (totale)",
+          "arm_home_scenario": "Scenario In Casa (parziale)",
+          "disarm_scenario": "Scenario Disattivazione"
+        }
+      }
     }
   },
   "entity": {

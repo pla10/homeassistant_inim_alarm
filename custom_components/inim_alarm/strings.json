@@ -27,6 +27,20 @@
       "reauth_successful": "Re-authentication successful"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "INIM Alarm Options",
+        "description": "Configure polling interval and alarm scenarios",
+        "data": {
+          "scan_interval": "Update interval (seconds)",
+          "arm_away_scenario": "Arm Away scenario (full arm)",
+          "arm_home_scenario": "Arm Home scenario (partial arm)",
+          "disarm_scenario": "Disarm scenario"
+        }
+      }
+    }
+  },
   "entity": {
     "alarm_control_panel": {
       "inim_alarm": {

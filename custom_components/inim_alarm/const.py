@@ -7,6 +7,10 @@ DOMAIN = "inim_alarm"
 # Configuration
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
+CONF_SCAN_INTERVAL = "scan_interval"
+CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
+CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
+CONF_DISARM_SCENARIO = "disarm_scenario"
 
 # API
 API_BASE_URL = "https://api.inimcloud.com/"

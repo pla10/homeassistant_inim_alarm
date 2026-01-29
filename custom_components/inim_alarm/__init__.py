@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,7 +13,14 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
-from .const import DOMAIN, PLATFORMS
+from .const import (
+    CONF_ARM_AWAY_SCENARIO,
+    CONF_ARM_HOME_SCENARIO,
+    CONF_DISARM_SCENARIO,
+    CONF_SCAN_INTERVAL,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import InimDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +30,8 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SENSOR,
 ]
+
+DEFAULT_SCAN_INTERVAL_SECONDS = 30
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -41,7 +51,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except InimApiError as err:
         raise ConfigEntryNotReady(f"Failed to connect: {err}") from err
 
-    coordinator = InimDataUpdateCoordinator(hass, api)
+    # Get scan interval from options or use default
+    scan_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
+    update_interval = timedelta(seconds=scan_interval_seconds)
+
+    coordinator = InimDataUpdateCoordinator(hass, api, update_interval)
     
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -50,11 +64,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
+        "options": {
+            CONF_ARM_AWAY_SCENARIO: entry.options.get(CONF_ARM_AWAY_SCENARIO, -1),
+            CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO, -1),
+            CONF_DISARM_SCENARIO: entry.options.get(CONF_DISARM_SCENARIO, -1),
+        },
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Register update listener for options changes
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
+
     return True
+
+
+async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update - reload integration."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
