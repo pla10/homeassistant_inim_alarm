@@ -1,0 +1,60 @@
+"""Constants for the INIM Alarm integration."""
+
+from datetime import timedelta
+
+DOMAIN = "inim_alarm"
+
+# Configuration
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
+
+# API
+API_BASE_URL = "https://api.inimcloud.com/"
+API_HEADERS = {
+    "Host": "api.inimcloud.com",
+    "Accept": "*/*",
+    "Accept-Language": "it-it",
+    "Accept-Encoding": "identity",
+    "User-Agent": "Inim Home/5 CFNetwork/1329 Darwin/21.3.0",
+}
+
+# API Methods
+METHOD_REGISTER_CLIENT = "RegisterClient"
+METHOD_GET_DEVICES_EXTENDED = "GetDevicesExtended"
+METHOD_ACTIVATE_SCENARIO = "ActivateScenario"
+METHOD_REQUEST_POLL = "RequestPoll"
+
+# Default values
+DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
+DEFAULT_CLIENT_NAME = "HomeAssistant"
+
+# Zone Status (from API, subtract 1 for binary state)
+ZONE_STATUS_CLOSED = 1  # After -1 = 0 (False/Closed)
+ZONE_STATUS_OPEN = 2    # After -1 = 1 (True/Open)
+
+# Area Armed Status
+AREA_ARMED_DISARMED = 4
+AREA_ARMED_ARMED = 1
+
+# Scenario IDs (these are common defaults, actual values come from API)
+SCENARIO_TOTAL = 0      # Arm all
+SCENARIO_DISARMED = 1   # Disarm all
+
+# Device info
+MANUFACTURER = "INIM Electronics"
+
+# Platforms
+PLATFORMS = ["alarm_control_panel", "binary_sensor", "sensor"]
+
+# Attributes
+ATTR_DEVICE_ID = "device_id"
+ATTR_ZONE_ID = "zone_id"
+ATTR_AREA_ID = "area_id"
+ATTR_SCENARIO_ID = "scenario_id"
+ATTR_SERIAL_NUMBER = "serial_number"
+ATTR_MODEL = "model"
+ATTR_FIRMWARE = "firmware"
+ATTR_VOLTAGE = "voltage"
+ATTR_ALARM_MEMORY = "alarm_memory"
+ATTR_TAMPER_MEMORY = "tamper_memory"
+ATTR_BYPASSED = "bypassed"

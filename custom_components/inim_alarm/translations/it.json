@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "INIM Alarm",
+        "description": "Inserisci le credenziali INIM Cloud (le stesse dell'app Inim Home)",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Ri-autenticazione",
+        "description": "Inserisci la nuova password per {username}",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi a INIM Cloud",
+      "invalid_auth": "Email o password non validi",
+      "unknown": "Errore imprevisto"
+    },
+    "abort": {
+      "already_configured": "Account già configurato",
+      "reauth_successful": "Ri-autenticazione completata con successo"
+    }
+  },
+  "entity": {
+    "alarm_control_panel": {
+      "inim_alarm": {
+        "name": "Allarme"
+      }
+    },
+    "binary_sensor": {
+      "zone": {
+        "name": "{zone_name}"
+      }
+    },
+    "sensor": {
+      "voltage": {
+        "name": "Voltaggio"
+      },
+      "area": {
+        "name": "{area_name}"
+      }
+    }
+  }
+}
