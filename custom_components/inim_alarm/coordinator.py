@@ -69,6 +69,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "zones": device.get("Zones", []),
                     "scenarios": device.get("Scenarios", []),
                     "peripherals": device.get("Peripherals", []),
+                    "thermostats": device.get("Thermostats", []),
+                    "blinds": device.get("Blinds", []),
                 }
                 data["devices"].append(device_data)
             

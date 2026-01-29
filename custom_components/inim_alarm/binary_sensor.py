@@ -174,9 +174,13 @@ class InimZoneBinarySensor(
             ATTR_ALARM_MEMORY: zone.get("AlarmMemory", 0) > 0,
             ATTR_TAMPER_MEMORY: zone.get("TamperMemory", 0) > 0,
             ATTR_BYPASSED: zone.get("Bypassed", 0) > 0,
+            "output_on": zone.get("OutputOn", 0) > 0,
+            "output_value": zone.get("OutputValue", 0),
             "areas": zone.get("Areas"),
             "type": zone.get("Type"),
             "terminal_id": zone.get("TerminalId"),
+            "voltage": zone.get("Voltage", 0) if zone.get("Voltage", 0) > 0 else None,
+            "power": zone.get("Power", 0) if zone.get("Power", 0) > 0 else None,
         }
 
     @callback
