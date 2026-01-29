@@ -9,9 +9,9 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 ## Features
 
 - 🔐 **Alarm Control Panel** - Arm/disarm your alarm system
-  - Arm Away (full arm - "TOTALE")
-  - Arm Home (partial arm - e.g., "PIANO TERRA", "PRIMO PIANO")
-  - Disarm ("SPENTO")
+  - Arm Away (full arm)
+  - Arm Home (partial arm - e.g., ground floor only, first floor only)
+  - Disarm
 - 🚪 **Binary Sensors** - Monitor all zones (doors, windows, motion sensors, tamper)
   - Automatic device class detection (door, window, motion, tamper)
   - Zone status (open/closed)
@@ -117,7 +117,7 @@ automation:
   - alias: "Alert: Window opened while armed"
     trigger:
       - platform: state
-        entity_id: binary_sensor.your_alarm_finestra_salotto
+        entity_id: binary_sensor.your_alarm_living_room_window
         to: "on"
     condition:
       - condition: not
