@@ -40,7 +40,7 @@
           "user_code": "User code (for zone bypass)"
         },
         "data_description": {
-          "user_code": "Your alarm user code (e.g., 00800). Required for bypassing zones."
+          "user_code": "Your alarm user code (e.g., 01234). Required for bypassing zones."
         }
       }
     }

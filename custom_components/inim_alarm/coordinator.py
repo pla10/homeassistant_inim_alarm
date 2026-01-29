@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import InimApi, InimApiError, InimAuthError
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, EVENT_ALARM_TRIGGERED
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +36,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.api = api
         self._devices: list[dict[str, Any]] = []
+        # Track previous alarm state for event triggering
+        self._previous_alarm_states: dict[tuple[int, int], bool] = {}
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from INIM API."""
@@ -75,6 +77,10 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data["devices"].append(device_data)
             
             _LOGGER.debug("Updated data for %d devices", len(data["devices"]))
+            
+            # Check for alarm state changes and fire events
+            self._check_alarm_triggered(data)
+            
             return data
 
         except InimAuthError as err:
@@ -135,6 +141,40 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if active_id is not None:
             return self.get_scenario(device_id, active_id)
         return None
+
+    def _check_alarm_triggered(self, data: dict[str, Any]) -> None:
+        """Check for alarm state changes and fire events."""
+        for device in data.get("devices", []):
+            device_id = device.get("device_id")
+            if not device_id:
+                continue
+            
+            for area in device.get("areas", []):
+                area_id = area.get("AreaId")
+                area_name = area.get("Name", f"Area {area_id}")
+                current_alarm = area.get("Alarm", False)
+                
+                key = (device_id, area_id)
+                previous_alarm = self._previous_alarm_states.get(key, False)
+                
+                # Fire event if alarm just triggered (false -> true)
+                if current_alarm and not previous_alarm:
+                    _LOGGER.warning(
+                        "ALARM TRIGGERED! Device: %s, Area: %s (%s)",
+                        device_id, area_id, area_name
+                    )
+                    self.hass.bus.async_fire(
+                        EVENT_ALARM_TRIGGERED,
+                        {
+                            "device_id": device_id,
+                            "device_name": device.get("name", "INIM Alarm"),
+                            "area_id": area_id,
+                            "area_name": area_name,
+                        },
+                    )
+                
+                # Update state tracking
+                self._previous_alarm_states[key] = current_alarm
 
     @property
     def devices(self) -> list[dict[str, Any]]:

@@ -40,7 +40,7 @@
           "user_code": "Codice utente (per bypass zone)"
         },
         "data_description": {
-          "user_code": "Il tuo codice utente dell'allarme (es. 00800). Necessario per bypassare le zone."
+          "user_code": "Il tuo codice utente dell'allarme (es. 01234). Necessario per bypassare le zone."
         }
       }
     }

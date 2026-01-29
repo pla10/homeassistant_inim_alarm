@@ -72,3 +72,6 @@ BYPASS_MODE_BYPASS = 3    # Bypassa zona
 # Service names
 SERVICE_BYPASS_ZONE = "bypass_zone"
 SERVICE_ACTIVATE_SCENARIO = "activate_scenario"
+
+# Event names
+EVENT_ALARM_TRIGGERED = "inim_alarm_triggered"

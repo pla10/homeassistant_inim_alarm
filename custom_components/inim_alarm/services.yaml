@@ -31,7 +31,7 @@ bypass_zone:
       name: User Code
       description: The user code for the alarm (if not set in integration options)
       required: false
-      example: "00800"
+      example: "01234"
       selector:
         text:
 
