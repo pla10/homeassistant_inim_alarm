@@ -74,7 +74,7 @@ class InimAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return InimAlarmOptionsFlow(config_entry)
+        return InimAlarmOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -165,9 +165,8 @@ class InvalidAuth(Exception):
 class InimAlarmOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for INIM Alarm."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
         self._scenarios: list[dict[str, Any]] = []
 
     async def async_step_init(
