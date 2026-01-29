@@ -201,7 +201,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Disclaimer
 
-This integration is not affiliated with or endorsed by INIM Electronics. Use at your own risk.
+This integration is not affiliated with, endorsed by, or connected to INIM Electronics S.r.l. in any way. 
+
+This is an independent, community-driven project that uses the publicly available INIM Cloud API (the same API used by the official Inim Home mobile app) to provide Home Assistant integration.
+
+**Use at your own risk.** The authors are not responsible for any issues that may arise from using this integration.
+
+### For INIM Electronics
+
+If you are from INIM Electronics and have any concerns about this integration, please [open an issue](https://github.com/pla10/homeassistant_inim_alarm/issues) or contact the maintainer. We are happy to discuss and address any concerns.
 
 ## License
 
