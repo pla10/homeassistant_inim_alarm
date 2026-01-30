@@ -57,9 +57,14 @@ async def async_setup_entry(
 class InimScenarioButton(
     CoordinatorEntity[InimDataUpdateCoordinator], ButtonEntity
 ):
-    """Representation of an INIM Scenario Button."""
+    """Representation of an INIM Scenario Button.
+    
+    Disabled by default for security - these buttons don't require PIN.
+    Users can enable them manually in Settings → Devices → Show disabled entities.
+    """
 
     _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = False  # Disabled for security
 
     def __init__(
         self,

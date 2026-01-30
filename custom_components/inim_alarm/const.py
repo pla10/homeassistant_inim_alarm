@@ -8,9 +8,10 @@ DOMAIN = "inim_alarm"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
-CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
-CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
-CONF_DISARM_SCENARIO = "disarm_scenario"
+# Legacy scenario config (removed in v2.0 - now uses InsertAreas API)
+# CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
+# CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
+# CONF_DISARM_SCENARIO = "disarm_scenario"
 CONF_USER_CODE = "user_code"
 
 # API

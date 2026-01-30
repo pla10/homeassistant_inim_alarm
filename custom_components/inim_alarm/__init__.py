@@ -20,9 +20,6 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
-    CONF_ARM_AWAY_SCENARIO,
-    CONF_ARM_HOME_SCENARIO,
-    CONF_DISARM_SCENARIO,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
     DOMAIN,
@@ -70,9 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api": api,
         "coordinator": coordinator,
         "options": {
-            CONF_ARM_AWAY_SCENARIO: entry.options.get(CONF_ARM_AWAY_SCENARIO, -1),
-            CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO, -1),
-            CONF_DISARM_SCENARIO: entry.options.get(CONF_DISARM_SCENARIO, -1),
+            CONF_SCAN_INTERVAL: scan_interval_seconds,
             # User code from entry.data (setup) with fallback to options (legacy)
             CONF_USER_CODE: entry.data.get(CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")),
         },

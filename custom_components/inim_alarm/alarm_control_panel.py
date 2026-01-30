@@ -26,9 +26,6 @@ from .const import (
     ATTR_MODEL,
     ATTR_SERIAL_NUMBER,
     ATTR_VOLTAGE,
-    CONF_ARM_AWAY_SCENARIO,
-    CONF_ARM_HOME_SCENARIO,
-    CONF_DISARM_SCENARIO,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
     DOMAIN,
@@ -56,20 +53,29 @@ async def async_setup_entry(
         device_id = device.get("device_id")
         if not device_id:
             continue
+        
+        # Get all configured area IDs for the main panel
+        areas = device.get("areas", [])
+        area_ids = []
+        for area in areas:
+            area_id = area.get("AreaId")
+            area_name = area.get("Name", f"Area {area_id}")
+            # Only include areas with custom names (configured)
+            if not (area_name.startswith("Area ") and area_name[5:].isdigit()):
+                area_ids.append(area_id)
             
-        # Main panel (uses scenarios)
+        # Main panel (uses InsertAreas on ALL configured areas)
         entities.append(
             InimAlarmControlPanel(
                 coordinator=coordinator,
                 api=api,
                 device_id=device_id,
-                entry_id=entry.entry_id,
+                area_ids=area_ids,
                 options=options,
             )
         )
         
-        # Area panels (uses InsertAreas API)
-        areas = device.get("areas", [])
+        # Individual area panels
         for area in areas:
             area_id = area.get("AreaId")
             area_name = area.get("Name", f"Area {area_id}")
@@ -95,14 +101,15 @@ async def async_setup_entry(
 class InimAlarmControlPanel(
     CoordinatorEntity[InimDataUpdateCoordinator], AlarmControlPanelEntity
 ):
-    """Representation of the main INIM Alarm Control Panel (scenario-based)."""
+    """Representation of the main INIM Alarm Control Panel.
+    
+    Uses InsertAreas API to arm/disarm ALL configured areas at once.
+    Only supports Armed Away and Disarmed states (simple UX).
+    """
 
     _attr_has_entity_name = True
     _attr_name = None  # Use device name
-    _attr_supported_features = (
-        AlarmControlPanelEntityFeature.ARM_HOME
-        | AlarmControlPanelEntityFeature.ARM_AWAY
-    )
+    _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
     _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
     _attr_code_arm_required = False  # Code requirement managed by Lovelace card
 
@@ -111,25 +118,19 @@ class InimAlarmControlPanel(
         coordinator: InimDataUpdateCoordinator,
         api: InimApi,
         device_id: int,
-        entry_id: str,
+        area_ids: list[int],
         options: dict | None = None,
     ) -> None:
         """Initialize the alarm control panel."""
         super().__init__(coordinator)
         self._api = api
         self._device_id = device_id
-        self._entry_id = entry_id
+        self._area_ids = area_ids  # All configured areas
         self._options = options or {}
         self._attr_unique_id = f"{device_id}_alarm"
         
-        # Get scenarios from device
-        device = coordinator.get_device(device_id)
-        self._scenarios = device.get("scenarios", []) if device else []
-        
-        # Get configured scenarios
-        self._arm_away_scenario = self._options.get(CONF_ARM_AWAY_SCENARIO, 0)
-        self._arm_home_scenario = self._options.get(CONF_ARM_HOME_SCENARIO, 2)
-        self._disarm_scenario = self._options.get(CONF_DISARM_SCENARIO, 1)
+        # User code for API calls
+        self._user_code = self._options.get(CONF_USER_CODE, "")
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -152,45 +153,36 @@ class InimAlarmControlPanel(
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
-        """Return the state of the alarm."""
+        """Return the state of the alarm based on all areas."""
         device = self.coordinator.get_device(self._device_id)
         if not device:
             return None
         
-        active_scenario = device.get("active_scenario")
-        
-        if active_scenario is None:
-            return None
-        
-        # Check areas for alarm state first
         areas = device.get("areas", [])
+        
+        # Check for alarm in any area first
         for area in areas:
             if area.get("Alarm", False):
                 return AlarmControlPanelState.TRIGGERED
         
-        # Check scenario states
-        if active_scenario == self._disarm_scenario:
-            return AlarmControlPanelState.DISARMED
+        # Check if all configured areas are disarmed
+        all_disarmed = True
+        any_armed = False
         
-        if active_scenario == self._arm_away_scenario:
+        for area in areas:
+            area_id = area.get("AreaId")
+            if area_id not in self._area_ids:
+                continue  # Skip unconfigured areas
+            
+            armed = area.get("Armed", AREA_ARMED_DISARMED)
+            if armed != AREA_ARMED_DISARMED:
+                all_disarmed = False
+                any_armed = True
+        
+        if any_armed:
             return AlarmControlPanelState.ARMED_AWAY
         
-        if active_scenario == self._arm_home_scenario:
-            return AlarmControlPanelState.ARMED_HOME
-        
-        # Unknown scenario - check if any area is armed
-        for area in areas:
-            if area.get("Armed", 4) != 4:  # 4 = disarmed
-                return AlarmControlPanelState.ARMED_AWAY
-        
         return AlarmControlPanelState.DISARMED
-
-    def _get_scenario_name(self, scenario_id: int) -> str:
-        """Get scenario name by ID."""
-        for scenario in self._scenarios:
-            if scenario.get("ScenarioId") == scenario_id:
-                return scenario.get("Name", f"Scenario {scenario_id}")
-        return f"Scenario {scenario_id}"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -199,61 +191,67 @@ class InimAlarmControlPanel(
         if not device:
             return {}
         
-        active_scenario = self.coordinator.get_active_scenario(self._device_id)
         polling_interval = self._options.get(CONF_SCAN_INTERVAL, 30)
         
-        attrs = {
+        # Get area names for display
+        area_names = []
+        for area in device.get("areas", []):
+            if area.get("AreaId") in self._area_ids:
+                area_names.append(area.get("Name", f"Area {area.get('AreaId')}"))
+        
+        return {
             ATTR_DEVICE_ID: self._device_id,
             ATTR_SERIAL_NUMBER: device.get("serial_number"),
             ATTR_MODEL: device.get("model"),
             ATTR_FIRMWARE: device.get("firmware"),
             ATTR_VOLTAGE: device.get("voltage"),
-            "active_scenario_id": device.get("active_scenario"),
-            "active_scenario_name": active_scenario.get("Name") if active_scenario else None,
             "network_status": device.get("network_status"),
             "faults": device.get("faults"),
             "polling_interval_seconds": polling_interval,
-            "configured_arm_away": self._get_scenario_name(self._arm_away_scenario),
-            "configured_arm_home": self._get_scenario_name(self._arm_home_scenario),
-            "configured_disarm": self._get_scenario_name(self._disarm_scenario),
+            "controlled_areas": area_names,
+            "area_ids": self._area_ids,
         }
-        
-        scenarios_info = [
-            {"id": s.get("ScenarioId"), "name": s.get("Name")}
-            for s in self._scenarios
-        ]
-        attrs["available_scenarios"] = scenarios_info
-        
-        return attrs
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        """Send disarm command."""
+        """Send disarm command for all areas."""
+        if not self._user_code:
+            _LOGGER.error(
+                "Cannot disarm: No user code configured. "
+                "Reconfigure the integration to set the user code."
+            )
+            return
+        
+        if not self._area_ids:
+            _LOGGER.warning("No configured areas to disarm")
+            return
+            
         _LOGGER.info(
-            "Disarming alarm for device %s (scenario: %s)", 
+            "Disarming all areas for device %s (areas: %s)", 
             self._device_id, 
-            self._get_scenario_name(self._disarm_scenario)
+            self._area_ids
         )
-        await self._api.activate_scenario(self._device_id, self._disarm_scenario)
-        await self.coordinator.async_request_refresh()
-
-    async def async_alarm_arm_home(self, code: str | None = None) -> None:
-        """Send arm home command (partial arm)."""
-        _LOGGER.info(
-            "Arming home for device %s (scenario: %s)", 
-            self._device_id,
-            self._get_scenario_name(self._arm_home_scenario)
-        )
-        await self._api.activate_scenario(self._device_id, self._arm_home_scenario)
+        await self._api.insert_areas(self._device_id, self._area_ids, self._user_code, arm=False)
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        """Send arm away command (full arm)."""
+        """Send arm command for all areas."""
+        if not self._user_code:
+            _LOGGER.error(
+                "Cannot arm: No user code configured. "
+                "Reconfigure the integration to set the user code."
+            )
+            return
+        
+        if not self._area_ids:
+            _LOGGER.warning("No configured areas to arm")
+            return
+            
         _LOGGER.info(
-            "Arming away for device %s (scenario: %s)", 
+            "Arming all areas for device %s (areas: %s)", 
             self._device_id,
-            self._get_scenario_name(self._arm_away_scenario)
+            self._area_ids
         )
-        await self._api.activate_scenario(self._device_id, self._arm_away_scenario)
+        await self._api.insert_areas(self._device_id, self._area_ids, self._user_code, arm=True)
         await self.coordinator.async_request_refresh()
 
     @callback

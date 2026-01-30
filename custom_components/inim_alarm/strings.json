@@ -12,7 +12,7 @@
         "data_description": {
           "username": "Your INIM Cloud email address",
           "password": "Your INIM Cloud password",
-          "user_code": "Alarm user code (e.g., 01234). Required for bypass and area control."
+          "user_code": "Alarm user code (e.g., 01234). Required for arm/disarm and bypass."
         }
       },
       "reauth_confirm": {
@@ -37,18 +37,12 @@
     "step": {
       "init": {
         "title": "INIM Alarm Options",
-        "description": "Configure scenarios and polling interval.",
+        "description": "Configure polling interval.",
         "data": {
-          "scan_interval": "Polling interval (seconds)",
-          "arm_away_scenario": "Arm Away Scenario (Full)",
-          "arm_home_scenario": "Arm Home Scenario (Partial)",
-          "disarm_scenario": "Disarm Scenario"
+          "scan_interval": "Polling interval (seconds)"
         },
         "data_description": {
-          "scan_interval": "How often to poll for updates (10-300 seconds)",
-          "arm_away_scenario": "Scenario to activate when arming away (full arm)",
-          "arm_home_scenario": "Scenario to activate when arming home (partial arm)",
-          "disarm_scenario": "Scenario to activate when disarming"
+          "scan_interval": "How often to poll for updates (10-300 seconds)"
         }
       }
     }

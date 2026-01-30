@@ -12,7 +12,7 @@
         "data_description": {
           "username": "Il tuo indirizzo email INIM Cloud",
           "password": "La tua password INIM Cloud",
-          "user_code": "Codice utente dell'allarme (es. 01234). Necessario per bypass e controllo aree."
+          "user_code": "Codice utente dell'allarme (es. 01234). Necessario per inserimento/disinserimento e bypass."
         }
       },
       "reauth_confirm": {
@@ -37,18 +37,12 @@
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
-        "description": "Configura gli scenari e l'intervallo di polling.",
+        "description": "Configura l'intervallo di polling.",
         "data": {
-          "scan_interval": "Intervallo di polling (secondi)",
-          "arm_away_scenario": "Scenario Fuori Casa (Totale)",
-          "arm_home_scenario": "Scenario In Casa (Parziale)",
-          "disarm_scenario": "Scenario Disattivazione"
+          "scan_interval": "Intervallo di polling (secondi)"
         },
         "data_description": {
-          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
-          "arm_away_scenario": "Scenario da attivare per inserimento totale",
-          "arm_home_scenario": "Scenario da attivare per inserimento parziale",
-          "disarm_scenario": "Scenario da attivare per disinserimento"
+          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)"
         }
       }
     }

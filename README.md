@@ -10,23 +10,21 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 
 ## ✨ Features
 
-- 🔐 **Alarm Control Panel** - Arm/disarm your alarm system
-  - Arm Away (full arm)
-  - Arm Home (partial arm)
-  - Disarm
-  - Configurable scenarios for each action
-- 🏠 **Area Control Panels** - Individual control for each configured area ⭐ NEW
+- 🔐 **Alarm Control Panel** - Arm/disarm all areas at once
+  - Simple UX: only Armed Away and Disarmed states
+  - Uses InsertAreas API directly (no scenarios required)
+- 🏠 **Area Control Panels** - Individual control for each configured area
   - Arm/disarm single areas independently
   - Perfect for partial arming (e.g., arm only ground floor)
 - 🚪 **Zone Sensors** - Monitor all zones (doors, windows, motion sensors, tamper)
   - Automatic device class detection
   - Alarm memory, tamper memory, bypass status
 - 🔀 **Zone Bypass** - Bypass/reinstate zones via switches
-- 📊 **Area Sensors** - Monitor area armed status
+- 📊 **Area Status Sensors** - Monitor area armed status (armed, armed_partial, disarmed)
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
-- 🎬 **Scenario Buttons** - Quick buttons to activate any scenario
-- ⚙️ **Configurable Options** - Customize polling interval and scenarios
+- 🎬 **Scenario Buttons** - Quick buttons to activate any scenario (disabled by default for security)
+- ⚙️ **Configurable Options** - Customize polling interval
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
 
@@ -75,7 +73,7 @@ This integration works with INIM alarm panels connected to INIM Cloud:
 4. Enter:
    - **Email** - Your INIM Cloud email (same as Inim Home app)
    - **Password** - Your INIM Cloud password
-   - **User Code** - Your alarm PIN code (required for bypass and area control)
+   - **User Code** - Your alarm PIN code (required for arm/disarm)
 
 ### Options (After Setup)
 
@@ -84,30 +82,18 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | Option | Description | Default |
 |--------|-------------|---------|
 | **Polling Interval** | How often to update (10-300 seconds) | 30 seconds |
-| **Arm Away Scenario** | Scenario for full arm | Auto-detect (TOTALE) |
-| **Arm Home Scenario** | Scenario for partial arm | Auto-detect (first partial) |
-| **Disarm Scenario** | Scenario for disarm | Auto-detect (SPENTO) |
-
-**Auto-detect** automatically finds the right scenario based on common names (TOTALE, SPENTO).
-If your scenarios have custom names, select them manually.
 
 ## 🏠 Entities Created
 
 ### Alarm Control Panels
 | Entity | Description |
 |--------|-------------|
-| `alarm_control_panel.<name>` | Main alarm control (scenario-based) |
+| `alarm_control_panel.<name>` | Main alarm control (arms/disarms ALL areas) |
 | `alarm_control_panel.<area_name>` | Area-specific control (e.g., Perimetrale PT) |
 
-**Main panel uses scenarios** - Best for arm all/disarm all operations.
+**Main panel** - Arms/disarms all configured areas at once. Simple UX with only Armed Away / Disarmed states.
 
-**Area panels control individual areas** - Best for partial arming specific zones.
-
-**Attributes include:**
-- Current scenario (active_scenario_name)
-- Configured scenarios (arm_away, arm_home, disarm)
-- Polling interval
-- System voltage, faults, network status
+**Area panels** - Control individual areas independently.
 
 ### Binary Sensors (Zones)
 | Entity | Description |
@@ -121,20 +107,30 @@ If your scenarios have custom names, select them manually.
 |--------|-------------|
 | `switch.<name>_bypass_<zone>` | Bypass/reinstate a zone |
 
-### Buttons (Scenarios)
+### Sensors (Area Status)
 | Entity | Description |
 |--------|-------------|
-| `button.<name>_scenario_<scenario>` | Activate a specific scenario |
+| `sensor.<name>_<area>` | Area armed status (armed, armed_partial, disarmed) |
 
-### Sensors
+### Sensors (System)
 | Entity | Description |
 |--------|-------------|
-| `sensor.<name>_<area>` | Area armed status |
 | `sensor.<name>_voltage` | Central unit voltage |
 | `sensor.<name>_<peripheral>_voltage` | Peripheral voltage (keypads, expanders) |
 | `sensor.<name>_nexus_gsm` | GSM module info |
 
 **GSM Attributes:** signal_strength, operator, IMEI, is_4g, has_gprs, battery_charge
+
+### Buttons (Scenarios) ⚠️
+| Entity | Description |
+|--------|-------------|
+| `button.<name>_scenario_<scenario>` | Activate a specific scenario |
+
+> **⚠️ Security Warning:** Scenario buttons are **disabled by default** because they don't require PIN confirmation. To enable them:
+> 1. Go to Settings → Devices & Services → INIM Alarm
+> 2. Click on the device
+> 3. Show disabled entities
+> 4. Enable the scenario buttons you need
 
 ## 🔢 Lovelace Keypad
 
@@ -144,7 +140,6 @@ To show a keypad on the alarm panel card (for UI security), use:
 type: alarm-panel
 entity: alarm_control_panel.your_alarm
 states:
-  - arm_home
   - arm_away
 require_code: true  # Shows numeric keypad
 ```
@@ -155,20 +150,20 @@ require_code: true  # Shows numeric keypad
 ## 📖 Services
 
 ```yaml
-# Arm Away (full)
+# Arm Away (all areas)
 service: alarm_control_panel.alarm_arm_away
 target:
   entity_id: alarm_control_panel.your_alarm
 
-# Arm Home (partial)
-service: alarm_control_panel.alarm_arm_home
-target:
-  entity_id: alarm_control_panel.your_alarm
-
-# Disarm
+# Disarm (all areas)
 service: alarm_control_panel.alarm_disarm
 target:
   entity_id: alarm_control_panel.your_alarm
+
+# Arm specific area
+service: alarm_control_panel.alarm_arm_away
+target:
+  entity_id: alarm_control_panel.perimetrale_pt
 
 # Bypass Zone
 service: inim_alarm.bypass_zone
@@ -177,7 +172,7 @@ data:
   zone_id: 1
   bypass: true  # false to reinstate
 
-# Activate Scenario
+# Activate Scenario (advanced)
 service: inim_alarm.activate_scenario
 data:
   device_id: 12345
@@ -253,6 +248,7 @@ automation:
 - **No third-party servers** - Direct communication with INIM Cloud only
 - **No credential logging** - Passwords/tokens never in logs
 - **HTTPS only** - All communication encrypted
+- **Scenario buttons disabled by default** - No accidental arm/disarm without PIN
 
 ## 🐛 Troubleshooting
 
@@ -264,7 +260,7 @@ automation:
 - Check polling interval in options
 - Enable debug logging (see below)
 
-### Area panels say "No user code configured"
+### Arm/Disarm not working
 - Delete and re-add the integration
 - Make sure to enter the user code during setup
 
