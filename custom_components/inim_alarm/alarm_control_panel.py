@@ -9,6 +9,7 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityFeature,
     AlarmControlPanelState,
+    CodeFormat,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -25,7 +26,6 @@ from .const import (
     ATTR_MODEL,
     ATTR_SERIAL_NUMBER,
     ATTR_VOLTAGE,
-    CONF_ALARM_CODE,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
@@ -103,6 +103,8 @@ class InimAlarmControlPanel(
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
     )
+    _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
+    _attr_code_arm_required = False  # Code requirement managed by Lovelace card
 
     def __init__(
         self,
@@ -124,15 +126,10 @@ class InimAlarmControlPanel(
         device = coordinator.get_device(device_id)
         self._scenarios = device.get("scenarios", []) if device else []
         
-        # Get configured scenarios (required, no auto-detect)
+        # Get configured scenarios
         self._arm_away_scenario = self._options.get(CONF_ARM_AWAY_SCENARIO, 0)
         self._arm_home_scenario = self._options.get(CONF_ARM_HOME_SCENARIO, 2)
         self._disarm_scenario = self._options.get(CONF_DISARM_SCENARIO, 1)
-        
-        # Code required on panel
-        alarm_code = self._options.get(CONF_ALARM_CODE, "")
-        self._attr_code_arm_required = bool(alarm_code)
-        self._alarm_code = alarm_code
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -195,12 +192,6 @@ class InimAlarmControlPanel(
                 return scenario.get("Name", f"Scenario {scenario_id}")
         return f"Scenario {scenario_id}"
 
-    def _validate_code(self, code: str | None) -> bool:
-        """Validate the provided code."""
-        if not self._attr_code_arm_required:
-            return True
-        return code == self._alarm_code
-
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
@@ -237,10 +228,6 @@ class InimAlarmControlPanel(
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
-        if not self._validate_code(code):
-            _LOGGER.warning("Invalid code provided for disarm")
-            return
-            
         _LOGGER.info(
             "Disarming alarm for device %s (scenario: %s)", 
             self._device_id, 
@@ -251,10 +238,6 @@ class InimAlarmControlPanel(
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command (partial arm)."""
-        if not self._validate_code(code):
-            _LOGGER.warning("Invalid code provided for arm home")
-            return
-            
         _LOGGER.info(
             "Arming home for device %s (scenario: %s)", 
             self._device_id,
@@ -265,10 +248,6 @@ class InimAlarmControlPanel(
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command (full arm)."""
-        if not self._validate_code(code):
-            _LOGGER.warning("Invalid code provided for arm away")
-            return
-            
         _LOGGER.info(
             "Arming away for device %s (scenario: %s)", 
             self._device_id,
@@ -290,6 +269,8 @@ class InimAreaAlarmControlPanel(
 
     _attr_has_entity_name = True
     _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
+    _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
+    _attr_code_arm_required = False  # Code requirement managed by Lovelace card
 
     def __init__(
         self,
@@ -310,11 +291,6 @@ class InimAreaAlarmControlPanel(
         
         self._attr_unique_id = f"{device_id}_area_{area_id}"
         self._attr_name = area_name
-        
-        # Code required on panel
-        alarm_code = self._options.get(CONF_ALARM_CODE, "")
-        self._attr_code_arm_required = bool(alarm_code)
-        self._alarm_code = alarm_code
         
         # User code for API calls
         self._user_code = self._options.get(CONF_USER_CODE, "")
@@ -357,12 +333,6 @@ class InimAreaAlarmControlPanel(
         
         return AlarmControlPanelState.ARMED_AWAY
 
-    def _validate_code(self, code: str | None) -> bool:
-        """Validate the provided code."""
-        if not self._attr_code_arm_required:
-            return True
-        return code == self._alarm_code
-
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
@@ -382,14 +352,10 @@ class InimAreaAlarmControlPanel(
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command for this area."""
-        if not self._validate_code(code):
-            _LOGGER.warning("Invalid code provided for disarm area %s", self._area_name)
-            return
-            
         if not self._user_code:
             _LOGGER.error(
                 "Cannot disarm area %s: No user code configured. "
-                "Set it in integration options.",
+                "Reconfigure the integration to set the user code.",
                 self._area_name
             )
             return
@@ -400,14 +366,10 @@ class InimAreaAlarmControlPanel(
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm command for this area."""
-        if not self._validate_code(code):
-            _LOGGER.warning("Invalid code provided for arm area %s", self._area_name)
-            return
-            
         if not self._user_code:
             _LOGGER.error(
                 "Cannot arm area %s: No user code configured. "
-                "Set it in integration options.",
+                "Reconfigure the integration to set the user code.",
                 self._area_name
             )
             return

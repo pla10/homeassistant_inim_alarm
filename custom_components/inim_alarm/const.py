@@ -12,7 +12,6 @@ CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
 CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
 CONF_DISARM_SCENARIO = "disarm_scenario"
 CONF_USER_CODE = "user_code"
-CONF_ALARM_CODE = "alarm_code"  # Code shown on panel (code_arm_required)
 
 # API
 API_BASE_URL = "https://api.inimcloud.com/"

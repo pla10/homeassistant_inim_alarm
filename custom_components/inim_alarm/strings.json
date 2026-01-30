@@ -2,45 +2,53 @@
   "config": {
     "step": {
       "user": {
-        "title": "INIM Alarm",
-        "description": "Enter your INIM Cloud credentials (same as Inim Home app)",
+        "title": "Connect to INIM Cloud",
+        "description": "Enter your INIM Cloud credentials and user code.",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "user_code": "User Code"
+        },
+        "data_description": {
+          "username": "Your INIM Cloud email address",
+          "password": "Your INIM Cloud password",
+          "user_code": "Alarm user code (e.g., 01234). Required for bypass and area control."
         }
       },
       "reauth_confirm": {
-        "title": "Re-authenticate",
-        "description": "Please enter the new password for {username}",
+        "title": "Reauthenticate",
+        "description": "Your session has expired. Please re-enter your password.",
         "data": {
           "password": "Password"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to INIM Cloud",
-      "invalid_auth": "Invalid email or password",
-      "unknown": "Unexpected error"
+      "cannot_connect": "Unable to connect to INIM Cloud",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unknown error occurred"
     },
     "abort": {
-      "already_configured": "Account already configured",
-      "reauth_successful": "Re-authentication successful"
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Reauthentication successful"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "INIM Alarm Options",
-        "description": "Configure polling interval, scenarios, and bypass settings",
+        "description": "Configure scenarios and polling interval.",
         "data": {
-          "scan_interval": "Update interval (seconds)",
-          "arm_away_scenario": "Arm Away scenario (full arm)",
-          "arm_home_scenario": "Arm Home scenario (partial arm)",
-          "disarm_scenario": "Disarm scenario",
-          "user_code": "User code (for zone bypass)"
+          "scan_interval": "Polling interval (seconds)",
+          "arm_away_scenario": "Arm Away Scenario (Full)",
+          "arm_home_scenario": "Arm Home Scenario (Partial)",
+          "disarm_scenario": "Disarm Scenario"
         },
         "data_description": {
-          "user_code": "Your alarm user code (e.g., 01234). Required for bypassing zones."
+          "scan_interval": "How often to poll for updates (10-300 seconds)",
+          "arm_away_scenario": "Scenario to activate when arming away (full arm)",
+          "arm_home_scenario": "Scenario to activate when arming home (partial arm)",
+          "disarm_scenario": "Scenario to activate when disarming"
         }
       }
     }
@@ -48,58 +56,38 @@
   "services": {
     "bypass_zone": {
       "name": "Bypass Zone",
-      "description": "Bypass or reinstate a zone in the alarm system",
+      "description": "Bypass or reinstate a zone",
       "fields": {
         "device_id": {
           "name": "Device ID",
-          "description": "The ID of the INIM alarm device"
+          "description": "The ID of the INIM device"
         },
         "zone_id": {
-          "name": "Zone ID", 
+          "name": "Zone ID",
           "description": "The ID of the zone to bypass"
         },
         "bypass": {
           "name": "Bypass",
-          "description": "True to bypass the zone, false to reinstate it"
+          "description": "True to bypass, False to reinstate"
         },
         "user_code": {
           "name": "User Code",
-          "description": "The user code for the alarm (if not set in integration options)"
+          "description": "Override the configured user code"
         }
       }
     },
     "activate_scenario": {
       "name": "Activate Scenario",
-      "description": "Activate any scenario on the alarm system",
+      "description": "Activate a specific scenario",
       "fields": {
         "device_id": {
           "name": "Device ID",
-          "description": "The ID of the INIM alarm device"
+          "description": "The ID of the INIM device"
         },
         "scenario_id": {
           "name": "Scenario ID",
-          "description": "The ID of the scenario to activate (0=TOTALE, 1=SPENTO, etc.)"
+          "description": "The ID of the scenario to activate"
         }
-      }
-    }
-  },
-  "entity": {
-    "alarm_control_panel": {
-      "inim_alarm": {
-        "name": "Alarm"
-      }
-    },
-    "binary_sensor": {
-      "zone": {
-        "name": "{zone_name}"
-      }
-    },
-    "sensor": {
-      "voltage": {
-        "name": "Voltage"
-      },
-      "area": {
-        "name": "{area_name}"
       }
     }
   }

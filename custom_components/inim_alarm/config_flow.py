@@ -15,7 +15,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
 from .const import (
-    CONF_ALARM_CODE,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
@@ -26,10 +25,12 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Setup schema includes user_code for API operations
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Required(CONF_USER_CODE): str,  # Required for bypass/area control
     }
 )
 
@@ -176,7 +177,6 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         for scenario in self._scenarios:
             if name.upper() in scenario.get("Name", "").upper():
                 return scenario.get("ScenarioId", default)
-        # If not found, return first scenario ID or default
         if self._scenarios:
             return self._scenarios[0].get("ScenarioId", default)
         return default
@@ -187,7 +187,6 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
             name = scenario.get("Name", "").upper()
             if name not in ("TOTALE", "SPENTO"):
                 return scenario.get("ScenarioId", default)
-        # If not found, return default
         return default
 
     async def async_step_init(
@@ -204,7 +203,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 if devices:
                     self._scenarios = devices[0].get("scenarios", [])
 
-        # Build scenario options for dropdown (no auto-detect)
+        # Build scenario options for dropdown
         scenario_options = {}
         for scenario in self._scenarios:
             scenario_id = scenario.get("ScenarioId")
@@ -217,10 +216,8 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
 
         # Get current values with reasonable defaults
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
-        current_user_code = self.config_entry.options.get(CONF_USER_CODE, "")
-        current_alarm_code = self.config_entry.options.get(CONF_ALARM_CODE, "")
         
-        # Default scenarios: try to find TOTALE (0), SPENTO (1), and first partial (2)
+        # Default scenarios
         default_arm_away = self.config_entry.options.get(
             CONF_ARM_AWAY_SCENARIO, 
             self._find_scenario_by_name("TOTALE", 0)
@@ -234,6 +231,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
             self._find_first_partial_scenario(2)
         )
 
+        # Options: only scan interval and scenarios (no codes - they're in setup)
         options_schema = vol.Schema(
             {
                 vol.Required(
@@ -252,14 +250,6 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_DISARM_SCENARIO,
                     default=default_disarm,
                 ): vol.In(scenario_options),
-                vol.Optional(
-                    CONF_USER_CODE,
-                    description={"suggested_value": current_user_code},
-                ): str,
-                vol.Optional(
-                    CONF_ALARM_CODE,
-                    description={"suggested_value": current_alarm_code},
-                ): str,
             }
         )
 
