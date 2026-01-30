@@ -110,8 +110,8 @@ class InimBypassSwitch(
         if not zone:
             return None
         
-        # Bypassed = Mode 3
-        return zone.get("Bypass", False)
+        # Bypassed is a number: 0 = not bypassed, >0 = bypassed
+        return zone.get("Bypassed", 0) > 0
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
