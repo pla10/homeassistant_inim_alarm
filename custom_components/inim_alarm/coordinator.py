@@ -44,14 +44,21 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             # First, request poll to wake up the central unit
             # This tells INIM to fetch fresh data from the panel
+            poll_requested = False
             for device in self._devices:
                 device_id = device.get("DeviceId")
                 if device_id:
                     try:
                         await self.api.request_poll(device_id)
                         _LOGGER.debug("Requested poll for device %s", device_id)
+                        poll_requested = True
                     except Exception as err:
                         _LOGGER.debug("RequestPoll failed for device %s: %s", device_id, err)
+            
+            # Wait for central to send data to cloud (5 seconds required)
+            if poll_requested:
+                import asyncio
+                await asyncio.sleep(5)
             
             # Now get devices with all data (should have fresh state)
             devices = await self.api.get_devices()
