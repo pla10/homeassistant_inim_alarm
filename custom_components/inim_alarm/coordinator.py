@@ -42,7 +42,18 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from INIM API."""
         try:
-            # Get devices with all data
+            # First, request poll to wake up the central unit
+            # This tells INIM to fetch fresh data from the panel
+            for device in self._devices:
+                device_id = device.get("DeviceId")
+                if device_id:
+                    try:
+                        await self.api.request_poll(device_id)
+                        _LOGGER.debug("Requested poll for device %s", device_id)
+                    except Exception as err:
+                        _LOGGER.debug("RequestPoll failed for device %s: %s", device_id, err)
+            
+            # Now get devices with all data (should have fresh state)
             devices = await self.api.get_devices()
             
             if not devices:
