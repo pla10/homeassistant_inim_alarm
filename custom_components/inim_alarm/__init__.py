@@ -20,7 +20,6 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
-    CONF_ALARM_CODE,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
@@ -74,8 +73,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_ARM_AWAY_SCENARIO: entry.options.get(CONF_ARM_AWAY_SCENARIO, -1),
             CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO, -1),
             CONF_DISARM_SCENARIO: entry.options.get(CONF_DISARM_SCENARIO, -1),
-            CONF_USER_CODE: entry.options.get(CONF_USER_CODE, ""),
-            CONF_ALARM_CODE: entry.options.get(CONF_ALARM_CODE, ""),
+            # User code from entry.data (setup) with fallback to options (legacy)
+            CONF_USER_CODE: entry.data.get(CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")),
         },
     }
 

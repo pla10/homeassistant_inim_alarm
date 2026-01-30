@@ -2,16 +2,22 @@
   "config": {
     "step": {
       "user": {
-        "title": "INIM Alarm",
-        "description": "Inserisci le credenziali INIM Cloud (le stesse dell'app Inim Home)",
+        "title": "Connetti a INIM Cloud",
+        "description": "Inserisci le credenziali INIM Cloud e il codice utente.",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "user_code": "Codice Utente"
+        },
+        "data_description": {
+          "username": "Il tuo indirizzo email INIM Cloud",
+          "password": "La tua password INIM Cloud",
+          "user_code": "Codice utente dell'allarme (es. 01234). Necessario per bypass e controllo aree."
         }
       },
       "reauth_confirm": {
         "title": "Riautenticazione",
-        "description": "Inserisci la nuova password per {username}",
+        "description": "La sessione è scaduta. Reinserisci la password.",
         "data": {
           "password": "Password"
         }
@@ -19,11 +25,11 @@
     },
     "error": {
       "cannot_connect": "Impossibile connettersi a INIM Cloud",
-      "invalid_auth": "Email o password non validi",
-      "unknown": "Errore imprevisto"
+      "invalid_auth": "Autenticazione non valida",
+      "unknown": "Errore sconosciuto"
     },
     "abort": {
-      "already_configured": "Account già configurato",
+      "already_configured": "Questo account è già configurato",
       "reauth_successful": "Riautenticazione completata"
     }
   },
@@ -31,16 +37,18 @@
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
-        "description": "Configura intervallo, scenari e impostazioni bypass",
+        "description": "Configura gli scenari e l'intervallo di polling.",
         "data": {
-          "scan_interval": "Intervallo di aggiornamento (secondi)",
-          "arm_away_scenario": "Scenario Fuori Casa (totale)",
-          "arm_home_scenario": "Scenario In Casa (parziale)",
-          "disarm_scenario": "Scenario Disattivazione",
-          "user_code": "Codice utente (per bypass zone)"
+          "scan_interval": "Intervallo di polling (secondi)",
+          "arm_away_scenario": "Scenario Fuori Casa (Totale)",
+          "arm_home_scenario": "Scenario In Casa (Parziale)",
+          "disarm_scenario": "Scenario Disattivazione"
         },
         "data_description": {
-          "user_code": "Il tuo codice utente dell'allarme (es. 01234). Necessario per bypassare le zone."
+          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
+          "arm_away_scenario": "Scenario da attivare per inserimento totale",
+          "arm_home_scenario": "Scenario da attivare per inserimento parziale",
+          "disarm_scenario": "Scenario da attivare per disinserimento"
         }
       }
     }
@@ -48,7 +56,7 @@
   "services": {
     "bypass_zone": {
       "name": "Bypassa Zona",
-      "description": "Bypassa o reinserisce una zona nel sistema di allarme",
+      "description": "Bypassa o reinserisce una zona",
       "fields": {
         "device_id": {
           "name": "ID Dispositivo",
@@ -59,18 +67,18 @@
           "description": "L'ID della zona da bypassare"
         },
         "bypass": {
-          "name": "Bypass",
-          "description": "True per bypassare, false per reinserire"
+          "name": "Bypassa",
+          "description": "True per bypassare, False per reinserire"
         },
         "user_code": {
           "name": "Codice Utente",
-          "description": "Il codice utente (se non impostato nelle opzioni)"
+          "description": "Sovrascrivi il codice utente configurato"
         }
       }
     },
     "activate_scenario": {
       "name": "Attiva Scenario",
-      "description": "Attiva qualsiasi scenario del sistema di allarme",
+      "description": "Attiva uno scenario specifico",
       "fields": {
         "device_id": {
           "name": "ID Dispositivo",
@@ -78,28 +86,8 @@
         },
         "scenario_id": {
           "name": "ID Scenario",
-          "description": "L'ID dello scenario da attivare (0=TOTALE, 1=SPENTO, ecc.)"
+          "description": "L'ID dello scenario da attivare"
         }
-      }
-    }
-  },
-  "entity": {
-    "alarm_control_panel": {
-      "inim_alarm": {
-        "name": "Allarme"
-      }
-    },
-    "binary_sensor": {
-      "zone": {
-        "name": "{zone_name}"
-      }
-    },
-    "sensor": {
-      "voltage": {
-        "name": "Voltaggio"
-      },
-      "area": {
-        "name": "{area_name}"
       }
     }
   }
