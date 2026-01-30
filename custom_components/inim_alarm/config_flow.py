@@ -15,6 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
 from .const import (
+    CONF_ALARM_CODE,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_DISARM_SCENARIO,
@@ -217,6 +218,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         # Get current values with reasonable defaults
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
         current_user_code = self.config_entry.options.get(CONF_USER_CODE, "")
+        current_alarm_code = self.config_entry.options.get(CONF_ALARM_CODE, "")
         
         # Default scenarios: try to find TOTALE (0), SPENTO (1), and first partial (2)
         default_arm_away = self.config_entry.options.get(
@@ -253,6 +255,10 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_USER_CODE,
                     description={"suggested_value": current_user_code},
+                ): str,
+                vol.Optional(
+                    CONF_ALARM_CODE,
+                    description={"suggested_value": current_alarm_code},
                 ): str,
             }
         )

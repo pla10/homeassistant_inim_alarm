@@ -291,6 +291,52 @@ class InimApi:
             await self._request(request_data)
             return True
 
+    async def insert_areas(
+        self, device_id: int, area_ids: list[int], user_code: str, arm: bool = True
+    ) -> bool:
+        """Arm or disarm specific areas.
+        
+        Args:
+            device_id: The device ID
+            area_ids: List of area IDs to arm/disarm
+            user_code: The user code for the alarm
+            arm: True to arm, False to disarm
+            
+        Returns:
+            True if successful
+        """
+        await self._ensure_authenticated()
+        
+        # Mode: 0 = arm (Armed=1), 3 = disarm (Armed=4)
+        mode = 0 if arm else 3
+        
+        request_data = {
+            "Node": "inimhome",
+            "Name": "it.inim.inimutenti",
+            "ClientIP": "",
+            "Method": "InsertAreas",
+            "Token": self._token,
+            "ClientId": self._client_id,
+            "Params": {
+                "AreaIds": area_ids,
+                "Mode": mode,
+                "DeviceId": str(device_id),
+                "Code": user_code,
+            },
+        }
+        
+        try:
+            await self._request(request_data)
+            action = "armed" if arm else "disarmed"
+            _LOGGER.info("Areas %s %s on device %s", area_ids, action, device_id)
+            return True
+        except InimAuthError:
+            # Token expired, re-authenticate and retry
+            await self.authenticate()
+            request_data["Token"] = self._token
+            await self._request(request_data)
+            return True
+
     @property
     def devices(self) -> list[dict[str, Any]]:
         """Return cached devices."""
