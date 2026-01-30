@@ -15,12 +15,17 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
   - Arm Home (partial arm)
   - Disarm
   - Configurable scenarios for each action
+- 🏠 **Area Control Panels** - Individual control for each configured area ⭐ NEW
+  - Arm/disarm single areas independently
+  - Perfect for partial arming (e.g., arm only ground floor)
 - 🚪 **Zone Sensors** - Monitor all zones (doors, windows, motion sensors, tamper)
   - Automatic device class detection
   - Alarm memory, tamper memory, bypass status
+- 🔀 **Zone Bypass** - Bypass/reinstate zones via switches
 - 📊 **Area Sensors** - Monitor area armed status
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
+- 🎬 **Scenario Buttons** - Quick buttons to activate any scenario
 - ⚙️ **Configurable Options** - Customize polling interval and scenarios
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
@@ -37,7 +42,8 @@ This integration works with INIM alarm panels connected to INIM Cloud:
 
 1. An INIM alarm system registered on INIM Cloud
 2. The **Inim Home** app credentials (email and password)
-3. Home Assistant 2024.1.0 or newer
+3. Your alarm **User Code** (the PIN you use to arm/disarm)
+4. Home Assistant 2024.1.0 or newer
 
 ## 🚀 Installation
 
@@ -66,7 +72,10 @@ This integration works with INIM alarm panels connected to INIM Cloud:
 1. Go to **Settings** → **Devices & Services**
 2. Click **+ Add Integration**
 3. Search for "INIM Alarm"
-4. Enter your INIM Cloud credentials (same as Inim Home app)
+4. Enter:
+   - **Email** - Your INIM Cloud email (same as Inim Home app)
+   - **Password** - Your INIM Cloud password
+   - **User Code** - Your alarm PIN code (required for bypass and area control)
 
 ### Options (After Setup)
 
@@ -84,10 +93,15 @@ If your scenarios have custom names, select them manually.
 
 ## 🏠 Entities Created
 
-### Alarm Control Panel
+### Alarm Control Panels
 | Entity | Description |
 |--------|-------------|
-| `alarm_control_panel.<name>` | Main alarm control (arm/disarm) |
+| `alarm_control_panel.<name>` | Main alarm control (scenario-based) |
+| `alarm_control_panel.<area_name>` | Area-specific control (e.g., Perimetrale PT) |
+
+**Main panel uses scenarios** - Best for arm all/disarm all operations.
+
+**Area panels control individual areas** - Best for partial arming specific zones.
 
 **Attributes include:**
 - Current scenario (active_scenario_name)
@@ -102,19 +116,41 @@ If your scenarios have custom names, select them manually.
 
 **Attributes:** alarm_memory, tamper_memory, bypassed, output_on
 
-### Sensors (Areas)
+### Switches (Zone Bypass)
+| Entity | Description |
+|--------|-------------|
+| `switch.<name>_bypass_<zone>` | Bypass/reinstate a zone |
+
+### Buttons (Scenarios)
+| Entity | Description |
+|--------|-------------|
+| `button.<name>_scenario_<scenario>` | Activate a specific scenario |
+
+### Sensors
 | Entity | Description |
 |--------|-------------|
 | `sensor.<name>_<area>` | Area armed status |
 | `sensor.<name>_voltage` | Central unit voltage |
-
-### Sensors (Peripherals) ⭐ NEW
-| Entity | Description |
-|--------|-------------|
 | `sensor.<name>_<peripheral>_voltage` | Peripheral voltage (keypads, expanders) |
 | `sensor.<name>_nexus_gsm` | GSM module info |
 
 **GSM Attributes:** signal_strength, operator, IMEI, is_4g, has_gprs, battery_charge
+
+## 🔢 Lovelace Keypad
+
+To show a keypad on the alarm panel card (for UI security), use:
+
+```yaml
+type: alarm-panel
+entity: alarm_control_panel.your_alarm
+states:
+  - arm_home
+  - arm_away
+require_code: true  # Shows numeric keypad
+```
+
+> **Note:** The keypad code is managed by Lovelace, not the integration.
+> You can set any code you want for the UI - it doesn't need to match your alarm code.
 
 ## 📖 Services
 
@@ -133,6 +169,19 @@ target:
 service: alarm_control_panel.alarm_disarm
 target:
   entity_id: alarm_control_panel.your_alarm
+
+# Bypass Zone
+service: inim_alarm.bypass_zone
+data:
+  device_id: 12345
+  zone_id: 1
+  bypass: true  # false to reinstate
+
+# Activate Scenario
+service: inim_alarm.activate_scenario
+data:
+  device_id: 12345
+  scenario_id: 2
 ```
 
 ## 🤖 Example Automations
@@ -149,6 +198,19 @@ automation:
       - service: alarm_control_panel.alarm_arm_away
         target:
           entity_id: alarm_control_panel.your_alarm
+```
+
+### Arm only ground floor at night
+```yaml
+automation:
+  - alias: "Arm ground floor at night"
+    trigger:
+      - platform: time
+        at: "23:00:00"
+    action:
+      - service: alarm_control_panel.alarm_arm_away
+        target:
+          entity_id: alarm_control_panel.perimetrale_pt
 ```
 
 ### Alert on window open while armed
@@ -201,6 +263,10 @@ automation:
 ### Entities not updating
 - Check polling interval in options
 - Enable debug logging (see below)
+
+### Area panels say "No user code configured"
+- Delete and re-add the integration
+- Make sure to enter the user code during setup
 
 ### Debug Logging
 ```yaml
