@@ -23,6 +23,8 @@ from .const import (
     ATTR_AREA_ID,
     ATTR_DEVICE_ID,
     ATTR_FIRMWARE,
+    ATTR_LAST_CHANGED_AT,
+    ATTR_LAST_CHANGED_BY,
     ATTR_MODEL,
     ATTR_SERIAL_NUMBER,
     ATTR_VOLTAGE,
@@ -104,12 +106,15 @@ class InimAlarmControlPanel(
     """Representation of the main INIM Alarm Control Panel.
     
     Uses InsertAreas API to arm/disarm ALL configured areas at once.
-    Only supports Armed Away and Disarmed states (simple UX).
+    Supports Armed Home, Armed Away and Disarmed states.
     """
 
     _attr_has_entity_name = True
     _attr_name = None  # Use device name
-    _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_HOME | 
+        AlarmControlPanelEntityFeature.ARM_AWAY
+    )
     _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
     _attr_code_arm_required = False  # Code requirement managed by Lovelace card
 
@@ -131,6 +136,10 @@ class InimAlarmControlPanel(
         
         # User code for API calls
         self._user_code = self._options.get(CONF_USER_CODE, "")
+        
+        # Track arming state and mode
+        self._pending_state: AlarmControlPanelState | None = None
+        self._armed_mode: str = "home"  # "home" or "away" - default to home
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -154,6 +163,10 @@ class InimAlarmControlPanel(
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
         """Return the state of the alarm based on all areas."""
+        # If we have a pending state (arming in progress), return it
+        if self._pending_state is not None:
+            return self._pending_state
+        
         device = self.coordinator.get_device(self._device_id)
         if not device:
             return None
@@ -180,8 +193,13 @@ class InimAlarmControlPanel(
                 any_armed = True
         
         if any_armed:
-            return AlarmControlPanelState.ARMED_AWAY
+            # Return armed state based on the mode set when arming
+            if self._armed_mode == "away":
+                return AlarmControlPanelState.ARMED_AWAY
+            return AlarmControlPanelState.ARMED_HOME
         
+        # Reset armed mode to default when disarmed
+        self._armed_mode = "home"
         return AlarmControlPanelState.DISARMED
 
     @property
@@ -199,7 +217,12 @@ class InimAlarmControlPanel(
             if area.get("AreaId") in self._area_ids:
                 area_names.append(area.get("Name", f"Area {area.get('AreaId')}"))
         
-        return {
+        # Get last changed info from coordinator
+        entity_key = f"{self._device_id}_alarm"
+        last_changed_by = self.coordinator.get_last_changed_by(entity_key)
+        last_changed_at = self.coordinator.get_last_changed_at(entity_key)
+        
+        attrs = {
             ATTR_DEVICE_ID: self._device_id,
             ATTR_SERIAL_NUMBER: device.get("serial_number"),
             ATTR_MODEL: device.get("model"),
@@ -210,7 +233,13 @@ class InimAlarmControlPanel(
             "polling_interval_seconds": polling_interval,
             "controlled_areas": area_names,
             "area_ids": self._area_ids,
+            ATTR_LAST_CHANGED_BY: last_changed_by,
         }
+        
+        if last_changed_at:
+            attrs[ATTR_LAST_CHANGED_AT] = last_changed_at.isoformat()
+        
+        return attrs
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command for all areas."""
@@ -224,6 +253,9 @@ class InimAlarmControlPanel(
         if not self._area_ids:
             _LOGGER.warning("No configured areas to disarm")
             return
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, None)
             
         _LOGGER.info(
             "Disarming all areas for device %s (areas: %s)", 
@@ -233,8 +265,8 @@ class InimAlarmControlPanel(
         await self._api.insert_areas(self._device_id, self._area_ids, self._user_code, arm=False)
         await self.coordinator.async_request_refresh()
 
-    async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        """Send arm command for all areas."""
+    async def async_alarm_arm_home(self, code: str | None = None) -> None:
+        """Send arm home command for all areas (partial protection)."""
         if not self._user_code:
             _LOGGER.error(
                 "Cannot arm: No user code configured. "
@@ -245,18 +277,63 @@ class InimAlarmControlPanel(
         if not self._area_ids:
             _LOGGER.warning("No configured areas to arm")
             return
+        
+        # Set pending state and armed mode
+        self._pending_state = AlarmControlPanelState.ARMING
+        self._armed_mode = "home"
+        self.async_write_ha_state()
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, None)
             
         _LOGGER.info(
-            "Arming all areas for device %s (areas: %s)", 
+            "Arming HOME all areas for device %s (areas: %s)", 
             self._device_id,
             self._area_ids
         )
         await self._api.insert_areas(self._device_id, self._area_ids, self._user_code, arm=True)
+        
+        # Clear pending state after API call
+        self._pending_state = None
+        await self.coordinator.async_request_refresh()
+
+    async def async_alarm_arm_away(self, code: str | None = None) -> None:
+        """Send arm away command for all areas (full protection)."""
+        if not self._user_code:
+            _LOGGER.error(
+                "Cannot arm: No user code configured. "
+                "Reconfigure the integration to set the user code."
+            )
+            return
+        
+        if not self._area_ids:
+            _LOGGER.warning("No configured areas to arm")
+            return
+        
+        # Set pending state and armed mode
+        self._pending_state = AlarmControlPanelState.ARMING
+        self._armed_mode = "away"
+        self.async_write_ha_state()
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, None)
+            
+        _LOGGER.info(
+            "Arming AWAY all areas for device %s (areas: %s)", 
+            self._device_id,
+            self._area_ids
+        )
+        await self._api.insert_areas(self._device_id, self._area_ids, self._user_code, arm=True)
+        
+        # Clear pending state after API call
+        self._pending_state = None
         await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        # Clear pending state when coordinator updates
+        self._pending_state = None
         self.async_write_ha_state()
 
 
@@ -266,7 +343,10 @@ class InimAreaAlarmControlPanel(
     """Representation of an INIM Area Alarm Control Panel (per-area control)."""
 
     _attr_has_entity_name = True
-    _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_HOME | 
+        AlarmControlPanelEntityFeature.ARM_AWAY
+    )
     _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
     _attr_code_arm_required = False  # Code requirement managed by Lovelace card
 
@@ -292,6 +372,10 @@ class InimAreaAlarmControlPanel(
         
         # User code for API calls
         self._user_code = self._options.get(CONF_USER_CODE, "")
+        
+        # Track arming state and mode
+        self._pending_state: AlarmControlPanelState | None = None
+        self._armed_mode: str = "home"  # "home" or "away" - default to home
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -315,6 +399,10 @@ class InimAreaAlarmControlPanel(
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
         """Return the state of the area."""
+        # If we have a pending state (arming in progress), return it
+        if self._pending_state is not None:
+            return self._pending_state
+        
         area = self.coordinator.get_area(self._device_id, self._area_id)
         if not area:
             return None
@@ -327,9 +415,14 @@ class InimAreaAlarmControlPanel(
         armed = area.get("Armed", AREA_ARMED_DISARMED)
         
         if armed == AREA_ARMED_DISARMED:
+            # Reset armed mode to default when disarmed
+            self._armed_mode = "home"
             return AlarmControlPanelState.DISARMED
         
-        return AlarmControlPanelState.ARMED_AWAY
+        # Return armed state based on the mode set when arming
+        if self._armed_mode == "away":
+            return AlarmControlPanelState.ARMED_AWAY
+        return AlarmControlPanelState.ARMED_HOME
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -338,7 +431,12 @@ class InimAreaAlarmControlPanel(
         if not area:
             return {}
         
-        return {
+        # Get last changed info from coordinator
+        entity_key = f"{self._device_id}_area_{self._area_id}"
+        last_changed_by = self.coordinator.get_last_changed_by(entity_key)
+        last_changed_at = self.coordinator.get_last_changed_at(entity_key)
+        
+        attrs = {
             ATTR_DEVICE_ID: self._device_id,
             ATTR_AREA_ID: self._area_id,
             "alarm": area.get("Alarm", False),
@@ -346,7 +444,13 @@ class InimAreaAlarmControlPanel(
             "tamper": area.get("Tamper", False),
             "tamper_memory": area.get("TamperMemory", False),
             "auto_insert": area.get("AutoInsert", False),
+            ATTR_LAST_CHANGED_BY: last_changed_by,
         }
+        
+        if last_changed_at:
+            attrs[ATTR_LAST_CHANGED_AT] = last_changed_at.isoformat()
+        
+        return attrs
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command for this area."""
@@ -357,13 +461,16 @@ class InimAreaAlarmControlPanel(
                 self._area_name
             )
             return
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, self._area_id)
             
         _LOGGER.info("Disarming area '%s' (ID: %s)", self._area_name, self._area_id)
         await self._api.insert_areas(self._device_id, [self._area_id], self._user_code, arm=False)
         await self.coordinator.async_request_refresh()
 
-    async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        """Send arm command for this area."""
+    async def async_alarm_arm_home(self, code: str | None = None) -> None:
+        """Send arm home command for this area (partial protection)."""
         if not self._user_code:
             _LOGGER.error(
                 "Cannot arm area %s: No user code configured. "
@@ -371,12 +478,50 @@ class InimAreaAlarmControlPanel(
                 self._area_name
             )
             return
+        
+        # Set pending state and armed mode
+        self._pending_state = AlarmControlPanelState.ARMING
+        self._armed_mode = "home"
+        self.async_write_ha_state()
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, self._area_id)
             
-        _LOGGER.info("Arming area '%s' (ID: %s)", self._area_name, self._area_id)
+        _LOGGER.info("Arming HOME area '%s' (ID: %s)", self._area_name, self._area_id)
         await self._api.insert_areas(self._device_id, [self._area_id], self._user_code, arm=True)
+        
+        # Clear pending state after API call
+        self._pending_state = None
+        await self.coordinator.async_request_refresh()
+
+    async def async_alarm_arm_away(self, code: str | None = None) -> None:
+        """Send arm away command for this area (full protection)."""
+        if not self._user_code:
+            _LOGGER.error(
+                "Cannot arm area %s: No user code configured. "
+                "Reconfigure the integration to set the user code.",
+                self._area_name
+            )
+            return
+        
+        # Set pending state and armed mode
+        self._pending_state = AlarmControlPanelState.ARMING
+        self._armed_mode = "away"
+        self.async_write_ha_state()
+        
+        # Register that this command is from Home Assistant
+        self.coordinator.register_ha_command(self._device_id, self._area_id)
+            
+        _LOGGER.info("Arming AWAY area '%s' (ID: %s)", self._area_name, self._area_id)
+        await self._api.insert_areas(self._device_id, [self._area_id], self._user_code, arm=True)
+        
+        # Clear pending state after API call
+        self._pending_state = None
         await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        # Clear pending state when coordinator updates
+        self._pending_state = None
         self.async_write_ha_state()

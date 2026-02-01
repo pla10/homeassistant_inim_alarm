@@ -76,3 +76,13 @@ SERVICE_ACTIVATE_SCENARIO = "activate_scenario"
 
 # Event names
 EVENT_ALARM_TRIGGERED = "inim_alarm_triggered"
+EVENT_STATE_CHANGED = "inim_alarm_state_changed"
+
+# Last changed by values
+CHANGED_BY_HOME_ASSISTANT = "home_assistant"
+CHANGED_BY_EXTERNAL = "external"
+CHANGED_BY_UNKNOWN = "unknown"
+
+# Attributes for tracking
+ATTR_LAST_CHANGED_BY = "last_changed_by"
+ATTR_LAST_CHANGED_AT = "last_changed_at"
