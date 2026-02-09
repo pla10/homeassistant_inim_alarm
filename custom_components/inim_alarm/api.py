@@ -94,7 +94,9 @@ class InimApi:
                     error_code = data.get("Status", 0)
                     
                     # Check for authentication errors
-                    if error_code in (18, 19, 20):  # Token expired/invalid
+                    if error_code in (18, 19, 20, 27):  # Token expired/invalid
+                        _LOGGER.debug("Token expired/invalid (code %s), invalidating token", error_code)
+                        self._token = None
                         raise InimAuthError(error_msg, error_code)
                     
                     raise InimApiError(error_msg, error_code)

@@ -68,6 +68,18 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         await self.api.request_poll(device_id)
                         _LOGGER.debug("Requested poll for device %s", device_id)
                         poll_requested = True
+                    except InimAuthError as err:
+                        _LOGGER.debug(
+                            "RequestPoll auth error for device %s: %s, token was refreshed",
+                            device_id, err,
+                        )
+                        # Token was refreshed inside request_poll, retry once
+                        try:
+                            await self.api.request_poll(device_id)
+                            _LOGGER.debug("Requested poll for device %s after re-auth", device_id)
+                            poll_requested = True
+                        except Exception as retry_err:
+                            _LOGGER.warning("RequestPoll retry failed for device %s: %s", device_id, retry_err)
                     except Exception as err:
                         _LOGGER.debug("RequestPoll failed for device %s: %s", device_id, err)
             
