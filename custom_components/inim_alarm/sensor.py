@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfElectricPotential
+from homeassistant.const import UnitOfElectricPotential, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -67,6 +67,15 @@ async def async_setup_entry(
             )
         )
         
+        # Create faults sensor for the device
+        entities.append(
+            InimFaultsSensor(
+                coordinator=coordinator,
+                device_id=device_id,
+                device_name=device_name,
+            )
+        )
+        
         # Create sensors for each area (only for areas that seem to be in use)
         for area in device.get("areas", []):
             area_id = area.get("AreaId")
@@ -116,6 +125,22 @@ async def async_setup_entry(
                         peripheral_type=peripheral_type,
                         item_id=item_id,
                         peripheral_name=peripheral_name,
+                    )
+                )
+        
+        # Create temperature sensors for thermostats (JOY MAX keyboards, etc.)
+        for thermostat in device.get("thermostats", []):
+            thermostat_id = thermostat.get("ThermostatId")
+            thermostat_name = thermostat.get("Name", f"Thermostat {thermostat_id}")
+            
+            if thermostat_id is not None:
+                entities.append(
+                    InimTemperatureSensor(
+                        coordinator=coordinator,
+                        device_id=device_id,
+                        device_name=device_name,
+                        thermostat_id=thermostat_id,
+                        thermostat_name=thermostat_name,
                     )
                 )
 
@@ -175,6 +200,183 @@ class InimVoltageSensor(
         if voltage is not None:
             return round(voltage, 2)
         return None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class InimFaultsSensor(
+    CoordinatorEntity[InimDataUpdateCoordinator], SensorEntity
+):
+    """Representation of an INIM Faults sensor."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Faults"
+    _attr_icon = "mdi:alert-circle"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        device_id: int,
+        device_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._device_id = device_id
+        self._device_name = device_name
+        self._attr_unique_id = f"{device_id}_faults"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the faults count."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return None
+
+        return device.get("faults", 0)
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on faults state."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return "mdi:alert-circle-outline"
+
+        faults = device.get("faults", 0)
+        if faults and faults > 0:
+            return "mdi:alert-circle"
+        return "mdi:check-circle"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class InimTemperatureSensor(
+    CoordinatorEntity[InimDataUpdateCoordinator], SensorEntity
+):
+    """Representation of an INIM Temperature sensor (JOY MAX keyboards, etc.)."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        device_id: int,
+        device_name: str,
+        thermostat_id: int,
+        thermostat_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._device_id = device_id
+        self._device_name = device_name
+        self._thermostat_id = thermostat_id
+        self._thermostat_name = thermostat_name
+        self._attr_unique_id = f"{device_id}_thermostat_{thermostat_id}"
+        self._attr_name = f"{thermostat_name} Temperature"
+
+    def _get_thermostat(self) -> dict[str, Any] | None:
+        """Get the thermostat data."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return None
+        for thermostat in device.get("thermostats", []):
+            if thermostat.get("ThermostatId") == self._thermostat_id:
+                return thermostat
+        return None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current temperature."""
+        thermostat = self._get_thermostat()
+        if not thermostat:
+            return None
+
+        temperature = thermostat.get("Temperature")
+        if temperature is not None:
+            return round(float(temperature), 1)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        thermostat = self._get_thermostat()
+        if not thermostat:
+            return {}
+
+        attrs: dict[str, Any] = {
+            ATTR_DEVICE_ID: self._device_id,
+            "thermostat_id": self._thermostat_id,
+            "thermostat_name": thermostat.get("Name"),
+        }
+
+        # Add setpoint if available
+        setpoint = thermostat.get("SetPoint")
+        if setpoint is not None:
+            attrs["setpoint"] = round(float(setpoint), 1)
+
+        # Add mode if available
+        mode = thermostat.get("Mode")
+        if mode is not None:
+            attrs["mode"] = mode
+
+        # Add enabled status if available
+        enabled = thermostat.get("Enabled")
+        if enabled is not None:
+            attrs["enabled"] = enabled > 0
+
+        # Add humidity if available
+        humidity = thermostat.get("Humidity")
+        if humidity is not None:
+            attrs["humidity"] = humidity
+
+        return attrs
 
     @callback
     def _handle_coordinator_update(self) -> None:
