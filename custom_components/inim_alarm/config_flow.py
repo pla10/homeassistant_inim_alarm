@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
 from .const import (
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
@@ -32,6 +33,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_USER_CODE): str,  # Required for bypass/area control
+        vol.Optional(CONF_ENABLE_SIA, default=False): bool,
         vol.Optional(CONF_SIA_PORT, default=DEFAULT_SIA_PORT): cv.port,
         vol.Optional(CONF_SIA_ACCOUNT): str,
     }
@@ -182,6 +184,9 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
 
         # Get current values
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
+        current_enable_sia = self.config_entry.options.get(
+            CONF_ENABLE_SIA, self.config_entry.data.get(CONF_ENABLE_SIA, False)
+        )
         current_sia_port = self.config_entry.options.get(
             CONF_SIA_PORT, self.config_entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT)
         )
@@ -195,6 +200,10 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_SCAN_INTERVAL,
                     default=current_scan,
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Optional(
+                    CONF_ENABLE_SIA,
+                    default=current_enable_sia,
+                ): bool,
                 vol.Optional(
                     CONF_SIA_PORT,
                     default=current_sia_port,

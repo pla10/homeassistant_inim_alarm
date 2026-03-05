@@ -1,0 +1,14 @@
+services:
+  homeassistant:
+    container_name: inim-ha-test
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - ./tmp/ha_config:/config
+      - ./custom_components:/config/custom_components
+    environment:
+      - TZ=Europe/Rome
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "6001:6001"
+

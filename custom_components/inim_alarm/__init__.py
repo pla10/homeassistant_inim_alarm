@@ -19,6 +19,7 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
@@ -83,19 +84,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start WebSocket client for real-time updates
     await coordinator.async_start_websocket()
 
-    # Start SIA server
-    sia_port = entry.options.get(
-        CONF_SIA_PORT, entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT)
+    # Start SIA server only if enabled
+    enable_sia = entry.options.get(
+        CONF_ENABLE_SIA, entry.data.get(CONF_ENABLE_SIA, False)
     )
-    sia_account = entry.options.get(CONF_SIA_ACCOUNT, entry.data.get(CONF_SIA_ACCOUNT))
-
-    try:
-        sia_server = await async_start_sia_server(
-            hass, coordinator, sia_port, sia_account
+    if enable_sia:
+        sia_port = entry.options.get(
+            CONF_SIA_PORT, entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT)
         )
-        hass.data[DOMAIN][entry.entry_id]["sia_server"] = sia_server
-    except Exception as err:
-        _LOGGER.error("Failed to start SIA server on port %s: %s", sia_port, err)
+        sia_account = entry.options.get(
+            CONF_SIA_ACCOUNT, entry.data.get(CONF_SIA_ACCOUNT)
+        )
+
+        try:
+            sia_server = await async_start_sia_server(
+                hass, coordinator, sia_port, sia_account
+            )
+            hass.data[DOMAIN][entry.entry_id]["sia_server"] = sia_server
+        except Exception as err:
+            _LOGGER.error("Failed to start SIA server on port %s: %s", sia_port, err)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

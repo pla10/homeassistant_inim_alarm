@@ -7,12 +7,18 @@
         "data": {
           "username": "Email",
           "password": "Password",
-          "user_code": "Codice Utente"
+          "user_code": "Codice Utente",
+          "enable_sia": "Abilita Server SIA",
+          "sia_port": "Porta SIA",
+          "sia_account": "Account SIA"
         },
         "data_description": {
           "username": "Il tuo indirizzo email INIM Cloud",
           "password": "La tua password INIM Cloud",
-          "user_code": "Codice utente dell'allarme (es. 01234). Necessario per inserimento/disinserimento e bypass."
+          "user_code": "Codice utente dell'allarme (es. 01234). Necessario per inserimento/disinserimento e bypass.",
+          "enable_sia": "Abilita l'ascolto locale per gli eventi SIA",
+          "sia_port": "Porta in ascolto per eventi SIA (default: 6001)",
+          "sia_account": "L'account SIA configurato nella centrale"
         }
       },
       "reauth_confirm": {
@@ -39,10 +45,16 @@
         "title": "Opzioni INIM Alarm",
         "description": "Configura l'intervallo di polling.",
         "data": {
-          "scan_interval": "Intervallo di polling (secondi)"
+          "scan_interval": "Intervallo di polling (secondi)",
+          "enable_sia": "Abilita Server SIA",
+          "sia_port": "Porta SIA",
+          "sia_account": "Account SIA"
         },
         "data_description": {
-          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)"
+          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
+          "enable_sia": "Abilita l'ascolto locale per gli eventi SIA",
+          "sia_port": "Porta in ascolto per eventi SIA (default: 6001)",
+          "sia_account": "L'account SIA configurato nella centrale"
         }
       }
     }
