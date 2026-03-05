@@ -6,7 +6,7 @@ bypass_zone:
       name: Device ID
       description: The ID of the INIM alarm device
       required: true
-      example: 248944
+      example: 123456
       selector:
         number:
           min: 1
@@ -43,7 +43,7 @@ activate_scenario:
       name: Device ID
       description: The ID of the INIM alarm device
       required: true
-      example: 248944
+      example: 123456
       selector:
         number:
           min: 1

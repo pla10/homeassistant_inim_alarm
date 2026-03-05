@@ -10,9 +10,9 @@ from datetime import datetime
 import aiohttp
 
 # === CONFIGURATION ===
-USERNAME = "planora@hotmail.com"
-PASSWORD = "qyhqik-tydpok-Sugde2"
-DEVICE_ID = 248944  # From your Burp capture
+USERNAME = "xxx@zzz.www"
+PASSWORD = "zzyyxx"
+DEVICE_ID = 123456  # From your Burp capture
 DELAY_SECONDS = 5  # Delay between RequestPoll and GetDevicesExtended
 
 API_BASE_URL = "https://api.inimcloud.com/"
