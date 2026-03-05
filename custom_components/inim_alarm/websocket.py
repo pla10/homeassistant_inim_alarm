@@ -149,3 +149,5 @@ class InimWebSocketClient:
                     _LOGGER.debug("Sent INIM WS ping")
                 except Exception as err:
                     _LOGGER.warning("Failed to send WS ping: %s", err)
+                    if not self._ws.closed:
+                        await self._ws.close()
