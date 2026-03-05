@@ -10,6 +10,7 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 
 ## ✨ Features
 
+- ⚡ **Real-time Updates** - Instant state changes for zones, areas and alarms via WebSocket (no polling delay)
 - 🔐 **Alarm Control Panel** - Arm/disarm all areas at once
   - Simple UX: only Armed Away and Disarmed states
   - Uses InsertAreas API directly (no scenarios required)
@@ -24,7 +25,7 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
 - 🎬 **Scenario Buttons** - Quick buttons to activate any scenario (disabled by default for security)
-- ⚙️ **Configurable Options** - Customize polling interval
+- ⚙️ **Configurable Options** - Customize polling interval (acts as a robust fallback)
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
 
@@ -79,16 +80,17 @@ This integration works with INIM alarm panels connected to INIM Cloud:
 
 Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure**
 
-| Option | Description | Default |
-|--------|-------------|---------|
+| Option               | Description                          | Default    |
+| -------------------- | ------------------------------------ | ---------- |
 | **Polling Interval** | How often to update (10-300 seconds) | 30 seconds |
 
 ## 🏠 Entities Created
 
 ### Alarm Control Panels
-| Entity | Description |
-|--------|-------------|
-| `alarm_control_panel.<name>` | Main alarm control (arms/disarms ALL areas) |
+
+| Entity                            | Description                                  |
+| --------------------------------- | -------------------------------------------- |
+| `alarm_control_panel.<name>`      | Main alarm control (arms/disarms ALL areas)  |
 | `alarm_control_panel.<area_name>` | Area-specific control (e.g., Perimetrale PT) |
 
 **Main panel** - Arms/disarms all configured areas at once. Simple UX with only Armed Away / Disarmed states.
@@ -96,37 +98,43 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 **Area panels** - Control individual areas independently.
 
 ### Binary Sensors (Zones)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                        | Description               |
+| ----------------------------- | ------------------------- |
 | `binary_sensor.<name>_<zone>` | Zone status (open/closed) |
 
 **Attributes:** alarm_memory, tamper_memory, bypassed, output_on
 
 ### Switches (Zone Bypass)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                        | Description             |
+| ----------------------------- | ----------------------- |
 | `switch.<name>_bypass_<zone>` | Bypass/reinstate a zone |
 
 ### Sensors (Area Status)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                 | Description                                        |
+| ---------------------- | -------------------------------------------------- |
 | `sensor.<name>_<area>` | Area armed status (armed, armed_partial, disarmed) |
 
 ### Sensors (System)
-| Entity | Description |
-|--------|-------------|
-| `sensor.<name>_voltage` | Central unit voltage |
+
+| Entity                               | Description                             |
+| ------------------------------------ | --------------------------------------- |
+| `sensor.<name>_voltage`              | Central unit voltage                    |
 | `sensor.<name>_<peripheral>_voltage` | Peripheral voltage (keypads, expanders) |
-| `sensor.<name>_nexus_gsm` | GSM module info |
+| `sensor.<name>_nexus_gsm`            | GSM module info                         |
 
 **GSM Attributes:** signal_strength, operator, IMEI, is_4g, has_gprs, battery_charge
 
 ### Buttons (Scenarios) ⚠️
-| Entity | Description |
-|--------|-------------|
+
+| Entity                              | Description                  |
+| ----------------------------------- | ---------------------------- |
 | `button.<name>_scenario_<scenario>` | Activate a specific scenario |
 
 > **⚠️ Security Warning:** Scenario buttons are **disabled by default** because they don't require PIN confirmation. To enable them:
+>
 > 1. Go to Settings → Devices & Services → INIM Alarm
 > 2. Click on the device
 > 3. Show disabled entities
@@ -141,7 +149,7 @@ type: alarm-panel
 entity: alarm_control_panel.your_alarm
 states:
   - arm_away
-require_code: true  # Shows numeric keypad
+require_code: true # Shows numeric keypad
 ```
 
 > **Note:** The keypad code is managed by Lovelace, not the integration.
@@ -182,6 +190,7 @@ data:
 ## 🤖 Example Automations
 
 ### Arm when everyone leaves
+
 ```yaml
 automation:
   - alias: "Arm alarm when leaving"
@@ -196,6 +205,7 @@ automation:
 ```
 
 ### Arm only ground floor at night
+
 ```yaml
 automation:
   - alias: "Arm ground floor at night"
@@ -209,6 +219,7 @@ automation:
 ```
 
 ### Alert on window open while armed
+
 ```yaml
 automation:
   - alias: "Window opened while armed"
@@ -229,6 +240,7 @@ automation:
 ```
 
 ### Monitor low voltage
+
 ```yaml
 automation:
   - alias: "Low voltage warning"
@@ -253,18 +265,22 @@ automation:
 ## 🐛 Troubleshooting
 
 ### Cannot connect
+
 - Verify credentials work in Inim Home app
 - Check internet connection
 
 ### Entities not updating
+
 - Check polling interval in options
 - Enable debug logging (see below)
 
 ### Arm/Disarm not working
+
 - Delete and re-add the integration
 - Make sure to enter the user code during setup
 
 ### Debug Logging
+
 ```yaml
 logger:
   logs:
