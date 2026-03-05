@@ -10,7 +10,6 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 
 ## ✨ Features
 
-- ⚡ **Real-time Updates** - Instant state changes for zones, areas and alarms via WebSocket (no polling delay)
 - 🔐 **Alarm Control Panel** - Arm/disarm all areas at once
   - Simple UX: only Armed Away and Disarmed states
   - Uses InsertAreas API directly (no scenarios required)
@@ -25,7 +24,8 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
 - 🎬 **Scenario Buttons** - Quick buttons to activate any scenario (disabled by default for security)
-- ⚙️ **Configurable Options** - Customize polling interval (acts as a robust fallback)
+- ⚡ **Real-time Updates** - Instant state changes for zones, areas and alarms via WebSocket (no polling delay)
+- ⚙️ **Configurable Polling interval** - Polling interval (acts as a robust fallback)
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
 
