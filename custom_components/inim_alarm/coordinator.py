@@ -45,7 +45,6 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=update_interval,
         )
         self.api = api
-        self._ws_client = InimWebSocketClient(api, self._on_websocket_update)
         self._devices: list[dict[str, Any]] = []
         # Track previous alarm state for event triggering
         self._previous_alarm_states: dict[tuple[int, int], bool] = {}
@@ -56,6 +55,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
+        
+        self._ws_client = InimWebSocketClient(api, self._async_on_websocket_update)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from INIM API."""
@@ -328,59 +329,65 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get the last changed at timestamp for an entity."""
         return self._last_changed_at.get(entity_key)
 
+    def _async_on_websocket_update(self, event_data: dict[str, Any]) -> None:
+        """Handle real-time updates from WebSocket."""
+        _LOGGER.debug("Handling WS update data: %s", event_data)
+        
+        if not self.data or "devices" not in self.data:
+            return
+
+        has_changes = False
+        
+        # Helper to find device in self.data by ID
+        def find_device(dev_id: int) -> dict[str, Any] | None:
+            for d in self.data.get("devices", []):
+                if d.get("device_id") == dev_id:
+                    return d
+            return None
+
+        # Update Zones
+        for zone_update in event_data.get("ZoneList") or []:
+            device_id = zone_update.get("Device_Id")
+            zone_id = zone_update.get("ZoneId")
+            if not device_id or zone_id is None:
+                continue
+                
+            device = find_device(device_id)
+            if device:
+                for idx, zone in enumerate(device.get("zones", [])):
+                    if zone.get("ZoneId") == zone_id:
+                        device["zones"][idx].update(zone_update)
+                        has_changes = True
+                        break
+
+        # Update Areas
+        for area_update in event_data.get("AreaList") or []:
+            device_id = area_update.get("Device_Id")
+            area_id = area_update.get("AreaId")
+            if not device_id or area_id is None:
+                continue
+                
+            device = find_device(device_id)
+            if device:
+                for idx, area in enumerate(device.get("areas", [])):
+                    if area.get("AreaId") == area_id:
+                        device["areas"][idx].update(area_update)
+                        has_changes = True
+                        break
+
+        # If data changed, ask Home Assistant to update entities immediately
+        if has_changes:
+            _LOGGER.debug("Applying partial updates from WS and refreshing entities")
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
     async def async_start_websocket(self) -> None:
-        """Start the WebSocket client for real-time updates."""
+        """Start listening for WebSocket events."""
         await self._ws_client.start()
 
     async def async_stop_websocket(self) -> None:
-        """Stop the WebSocket client."""
+        """Stop listening for WebSocket events."""
         await self._ws_client.stop()
-
-    def _on_websocket_update(self, event_data: dict[str, Any]) -> None:
-        """Handle real-time updates from WebSocket.
-
-        Patches current coordinator data in-place with zone/area updates
-        and notifies listeners immediately.
-        """
-        if not self.data or not isinstance(event_data, dict):
-            return
-
-        zone_list = event_data.get("ZoneList") or []
-        area_list = event_data.get("AreaList") or []
-
-        if not zone_list and not area_list:
-            return
-
-        _LOGGER.debug(
-            "WebSocket update: %d zones, %d areas",
-            len(zone_list),
-            len(area_list),
-        )
-
-        for device in self.data.get("devices", []):
-            if zone_list:
-                zones = device.get("zones", [])
-                for zone_update in zone_list:
-                    zone_id = zone_update.get("ZoneId")
-                    for idx, zone in enumerate(zones):
-                        if zone.get("ZoneId") == zone_id:
-                            zones[idx].update(zone_update)
-                            break
-
-            if area_list:
-                areas = device.get("areas", [])
-                for area_update in area_list:
-                    area_id = area_update.get("AreaId")
-                    for idx, area in enumerate(areas):
-                        if area.get("AreaId") == area_id:
-                            areas[idx].update(area_update)
-                            break
-
-        # Check for alarm/state changes from this WS update
-        self._check_alarm_triggered(self.data)
-
-        # Push updated data to all listeners
-        self.async_set_updated_data(self.data)
 
     @property
     def devices(self) -> list[dict[str, Any]]:

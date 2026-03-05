@@ -59,12 +59,22 @@ class InimApi:
         self._client_id = f"ha-{uuid.uuid4()}"
         self._devices: list[dict[str, Any]] = []
 
-    async def _get_session(self) -> aiohttp.ClientSession:
+    async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
             self._own_session = True
         return self._session
+
+    @property
+    def token(self) -> str | None:
+        """Return the current authentication token."""
+        return self._token
+
+    @property
+    def client_id(self) -> str:
+        """Return the client identifier."""
+        return self._client_id
 
     async def close(self) -> None:
         """Close the session if we own it."""
@@ -73,7 +83,7 @@ class InimApi:
 
     async def _request(self, request_data: dict[str, Any]) -> dict[str, Any]:
         """Make a request to the INIM API."""
-        session = await self._get_session()
+        session = await self.get_session()
         
         # URL encode the JSON request
         req_json = json.dumps(request_data, separators=(",", ":"))

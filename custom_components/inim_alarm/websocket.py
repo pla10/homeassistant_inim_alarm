@@ -1,4 +1,4 @@
-"""WebSocket client for INIM Cloud real-time updates."""
+"""WebSocket client for INIM Cloud."""
 
 import asyncio
 import json
@@ -13,8 +13,7 @@ from .api import InimApi
 _LOGGER = logging.getLogger(__name__)
 
 WS_URL = "wss://ws.inimcloud.com/events"
-PING_INTERVAL = 115  # Server timeout is ~120s, ping a bit earlier
-RECONNECT_DELAY = 10
+PING_INTERVAL = 115  # Polling is done every 2 minutes (120s), so pinging a bit earlier
 
 
 class InimWebSocketClient:
@@ -44,23 +43,25 @@ class InimWebSocketClient:
     async def stop(self) -> None:
         """Stop the WebSocket client."""
         self._is_running = False
-
+        
         if self._ping_task:
             self._ping_task.cancel()
             self._ping_task = None
-
+            
         if self._ws and not self._ws.closed:
             await self._ws.close()
-
+            
         if self._run_task:
             self._run_task.cancel()
             self._run_task = None
 
     async def _get_ws_url(self) -> str:
-        """Construct the WebSocket connection URL with auth."""
+        """Construct the connection URL."""
+        # Ensure we are authenticated and have a token
         if not self._api.is_authenticated:
             await self._api.authenticate()
 
+        # Build the exact request params found in Burp Suite
         req_data = {
             "Node": "inimhome",
             "Name": "it.inim.inimutenti",
@@ -76,76 +77,75 @@ class InimWebSocketClient:
         return f"{WS_URL}?req={quote(req_json)}"
 
     async def _listen_loop(self) -> None:
-        """Main listening loop with auto-reconnect."""
+        """Main listening loop for the WebSocket connection."""
         while self._is_running:
             try:
                 session = await self._api.get_session()
                 url = await self._get_ws_url()
-
+                
                 _LOGGER.debug("Connecting to INIM WebSocket")
                 async with session.ws_connect(url, heartbeat=None) as ws:
                     self._ws = ws
                     _LOGGER.info("Connected to INIM WebSocket")
-
+                    
                     async for msg in ws:
                         if not self._is_running:
                             break
-
+                            
                         if msg.type == aiohttp.WSMsgType.TEXT:
-                            self._handle_message(msg.data)
-                        elif msg.type in (
-                            aiohttp.WSMsgType.CLOSED,
-                            aiohttp.WSMsgType.ERROR,
-                        ):
-                            _LOGGER.warning("WebSocket closed/error: %s", msg)
-                            break
+                            text = msg.data
+                            _LOGGER.debug("Received WS message: %s", text)
+                            
+                            try:
+                                data = json.loads(text)
+                                msg_type = data.get("Type")
+                                
+                                if msg_type == "EVENT":
+                                    # Pushed events have double JSON encoded data payload
+                                    event_data = data.get("Data", {})
+                                    inner_data_str = event_data.get("Data")
+                                    
+                                    if inner_data_str and isinstance(inner_data_str, str):
+                                        try:
+                                            inner_data = json.loads(inner_data_str)
+                                            # Notify the coordinator of the event payload
+                                            self._on_event(inner_data)
+                                        except json.JSONDecodeError as err:
+                                            _LOGGER.error("Failed to parse inner WS payload: %s", err)
+                                            
+                                elif msg_type == "PONG":
+                                    _LOGGER.debug("Received PONG from INIM WS")
+                                else:
+                                    _LOGGER.debug("Unknown WS message type: %s", msg_type)
 
+                            except json.JSONDecodeError as err:
+                                _LOGGER.error("Failed to parse WS message: %s - Data: %s", err, text)
+                                
+                        elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                            _LOGGER.warning("WebSocket connection closed or error: %s", msg)
+                            break
+                            
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                _LOGGER.warning(
-                    "WebSocket connection error: %s. Reconnecting in %ds...",
-                    err,
-                    RECONNECT_DELAY,
-                )
-            except Exception:
-                _LOGGER.exception("Unexpected error in WebSocket loop")
+                _LOGGER.warning("WebSocket connection error: %s. Reconnecting in 10s...", err)
+            except Exception as err:
+                _LOGGER.exception("Unexpected error in WebSocket loop: %s", err)
             finally:
                 self._ws = None
 
+            # Add a backoff before trying to reconnect
             if self._is_running:
-                await asyncio.sleep(RECONNECT_DELAY)
-
-    def _handle_message(self, text: str) -> None:
-        """Parse and dispatch a WebSocket message."""
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Failed to parse WS message: %s", err)
-            return
-
-        msg_type = data.get("Type")
-
-        if msg_type == "EVENT":
-            event_data = data.get("Data", {})
-            inner_data_str = event_data.get("Data")
-
-            if inner_data_str and isinstance(inner_data_str, str):
-                try:
-                    inner_data = json.loads(inner_data_str)
-                    self._on_event(inner_data)
-                except json.JSONDecodeError as err:
-                    _LOGGER.error("Failed to parse inner WS payload: %s", err)
-        elif msg_type == "PONG":
-            _LOGGER.debug("Received PONG from INIM WS")
-        else:
-            _LOGGER.debug("Unknown WS message type: %s", msg_type)
+                await asyncio.sleep(10)
 
     async def _ping_loop(self) -> None:
-        """Send keep-alive pings at regular intervals."""
+        """Periodically send the keep-alive ping."""
         while self._is_running:
             await asyncio.sleep(PING_INTERVAL)
             if self._ws and not self._ws.closed:
                 try:
+                    # Inim's keep-alive ping is simply sending the string "@ " over the socket
+                    _LOGGER.debug("Sending INIM WS Ping '@ '")
                     await self._ws.send_str("@ ")
-                    _LOGGER.debug("Sent INIM WS ping")
                 except Exception as err:
                     _LOGGER.warning("Failed to send WS ping: %s", err)
+                    if not self._ws.closed:
+                        await self._ws.close()
