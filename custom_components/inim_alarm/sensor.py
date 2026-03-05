@@ -340,7 +340,7 @@ class InimTemperatureSensor(
 
         temperature = thermostat.get("Temperature")
         if temperature is not None:
-            return round(float(temperature), 1)
+            return round(float(temperature) / 10, 1)
         return None
 
     @property
@@ -359,7 +359,7 @@ class InimTemperatureSensor(
         # Add setpoint if available
         setpoint = thermostat.get("SetPoint")
         if setpoint is not None:
-            attrs["setpoint"] = round(float(setpoint), 1)
+            attrs["setpoint"] = round(float(setpoint) / 10, 1)
 
         # Add mode if available
         mode = thermostat.get("Mode")
