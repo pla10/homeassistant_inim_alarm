@@ -6,7 +6,7 @@
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=inim_alarm)
 
-A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, etc.) via INIM Cloud.
+A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, etc.) via INIM Cloud, with optional local real-time updates.
 
 ## ✨ Features
 
@@ -23,10 +23,26 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 - 📊 **Area Status Sensors** - Monitor area armed status (armed, armed_partial, disarmed)
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
+- 🌡️ **Temperature Sensors** - Monitor JOY MAX keyboard temperatures
+- ⚠️ **Fault Sensors** - Monitor system faults
 - 🎬 **Scenario Buttons** - Quick buttons to activate any scenario (disabled by default for security)
-- ⚙️ **Configurable Options** - Customize polling interval
+- ⚙️ **Configurable Options** - Customize polling interval and SIA-IP settings
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
+
+## 📡 Real-Time Updates
+
+The integration supports three communication channels for maximum reliability and speed:
+
+| Channel | Latency | Direction | Use Case |
+|---------|---------|-----------|----------|
+| **REST API** (polling) | ~35s | HA → Cloud → Panel | Full state refresh (fallback) |
+| **WebSocket** (cloud push) | 1-3s | Panel → Cloud → HA | Alarm events, arming/disarming |
+| **SIA-IP** (local push) | < 1s | Panel → HA (direct LAN) | Zone open/close, tamper, burglar alarm |
+
+- **WebSocket** is always active and provides near-instant notifications for alarm-critical events (sirens, arming state changes) via INIM Cloud.
+- **SIA-IP** is an optional local listener that receives SIA-DC09 messages directly from the panel over your LAN — no cloud dependency, sub-second latency for all sensor events.
+- **Polling** acts as a safety net to reconcile state. When SIA-IP is enabled, polling is automatically reduced to every 5 minutes.
 
 ## 📋 Supported Devices
 
@@ -81,7 +97,27 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| **Polling Interval** | How often to update (10-300 seconds) | 30 seconds |
+| **Polling Interval** | How often to poll for full state update (10-300s) | 30s (300s if SIA-IP enabled) |
+| **Enable SIA-IP** | Enable local SIA-IP TCP listener | Off |
+| **SIA-IP Port** | TCP port for SIA-IP listener | 6001 |
+| **SIA Account ID** | Filter by SIA account (leave empty for all) | Empty |
+
+### SIA-IP Setup (Optional)
+
+SIA-IP provides the fastest updates by receiving events directly from the panel over your local network. This requires configuration on the INIM panel by your installer:
+
+1. **On the INIM panel** (via installer or SmartLeague software):
+   - Enable SIA-IP reporting on the SmartLAN/SI module
+   - Set the **Home Assistant IP address** as the receiving center
+   - Set the **port** (default: 6001)
+   - Protocol: SIA-DC09 over TCP
+2. **In Home Assistant**:
+   - Go to integration options
+   - Enable **SIA-IP listener**
+   - Set the same **port** configured on the panel
+   - Optionally set the **SIA Account ID** to filter messages
+
+> **Note:** SIA-IP requires your HA instance to be reachable from the panel on the configured port. Make sure your firewall allows incoming TCP connections on that port.
 
 ## 🏠 Entities Created
 
@@ -116,8 +152,10 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | Entity | Description |
 |--------|-------------|
 | `sensor.<name>_voltage` | Central unit voltage |
+| `sensor.<name>_faults` | System fault count |
 | `sensor.<name>_<peripheral>_voltage` | Peripheral voltage (keypads, expanders) |
 | `sensor.<name>_nexus_gsm` | GSM module info |
+| `sensor.<name>_<thermostat>_temperature` | JOY MAX keyboard temperature |
 
 **GSM Attributes:** signal_strength, operator, IMEI, is_4g, has_gprs, battery_charge
 
@@ -247,7 +285,8 @@ automation:
 - **Credentials stay local** - Stored encrypted in Home Assistant only
 - **No third-party servers** - Direct communication with INIM Cloud only
 - **No credential logging** - Passwords/tokens never in logs
-- **HTTPS only** - All communication encrypted
+- **HTTPS only** - All cloud communication encrypted
+- **SIA-IP local only** - Local listener never leaves your LAN
 - **Scenario buttons disabled by default** - No accidental arm/disarm without PIN
 
 ## 🐛 Troubleshooting
@@ -258,11 +297,19 @@ automation:
 
 ### Entities not updating
 - Check polling interval in options
+- WebSocket updates should appear in debug logs
+- If using SIA-IP, verify the panel can reach HA on the configured port
 - Enable debug logging (see below)
 
 ### Arm/Disarm not working
 - Delete and re-add the integration
 - Make sure to enter the user code during setup
+
+### SIA-IP not receiving events
+- Verify the panel is configured to send SIA-IP events to your HA IP
+- Check that the port matches on both sides
+- Ensure no firewall is blocking incoming TCP connections
+- Check debug logs for "SIA-IP" messages
 
 ### Debug Logging
 ```yaml
@@ -289,4 +336,5 @@ MIT License - see [LICENSE](LICENSE)
 ## 👏 Credits
 
 - Developed by [Placido Falqueto](https://github.com/pla10)
+- Thanks to [@thekoma](https://github.com/thekoma) for WebSocket improvements and SIA-IP concept
 - Thanks to the Home Assistant community
