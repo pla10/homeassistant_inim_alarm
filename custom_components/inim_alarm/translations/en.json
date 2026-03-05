@@ -7,12 +7,18 @@
         "data": {
           "username": "Email",
           "password": "Password",
-          "user_code": "User Code"
+          "user_code": "User Code",
+          "enable_sia": "Enable SIA Server",
+          "sia_port": "SIA Port",
+          "sia_account": "SIA Account"
         },
         "data_description": {
           "username": "Your INIM Cloud email address",
           "password": "Your INIM Cloud password",
-          "user_code": "Alarm user code (e.g., 01234). Required for bypass and area control."
+          "user_code": "Alarm user code (e.g., 01234). Required for bypass and area control.",
+          "enable_sia": "Enable the local SIA listener",
+          "sia_port": "Port to listen on for SIA events (default: 6001)",
+          "sia_account": "The SIA account configured on the panel"
         }
       },
       "reauth_confirm": {
@@ -40,15 +46,15 @@
         "description": "Configure scenarios and polling interval.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
-          "arm_away_scenario": "Arm Away Scenario (Full)",
-          "arm_home_scenario": "Arm Home Scenario (Partial)",
-          "disarm_scenario": "Disarm Scenario"
+          "enable_sia": "Enable SIA Server",
+          "sia_port": "SIA Port",
+          "sia_account": "SIA Account"
         },
         "data_description": {
           "scan_interval": "How often to poll for updates (10-300 seconds)",
-          "arm_away_scenario": "Scenario to activate when arming away (full arm)",
-          "arm_home_scenario": "Scenario to activate when arming home (partial arm)",
-          "disarm_scenario": "Scenario to activate when disarming"
+          "enable_sia": "Enable the local SIA listener",
+          "sia_port": "Port to listen on for SIA events (default: 6001)",
+          "sia_account": "The SIA account configured on the panel"
         }
       }
     }

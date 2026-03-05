@@ -11,23 +11,31 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
 from .const import (
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
+    CONF_SIA_ACCOUNT,
+    CONF_SIA_PORT,
     CONF_USER_CODE,
+    DEFAULT_SIA_PORT,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# Setup schema includes user_code for API operations
+# Setup schema includes user_code for API operations and optional SIA
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_USER_CODE): str,  # Required for bypass/area control
+        vol.Optional(CONF_ENABLE_SIA, default=False): bool,
+        vol.Optional(CONF_SIA_PORT, default=DEFAULT_SIA_PORT): cv.port,
+        vol.Optional(CONF_SIA_ACCOUNT): str,
     }
 )
 
@@ -44,19 +52,19 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     try:
         await api.authenticate()
         devices = await api.get_devices()
-        
+
         if not devices:
             raise InimApiError("No devices found")
-        
+
         # Get the first device info for the title
         first_device = devices[0]
         title = first_device.get("Name", "INIM Alarm")
-        
+
         return {
             "title": title,
             "device_count": len(devices),
         }
-        
+
     except InimAuthError as err:
         raise InvalidAuth from err
     except InimApiError as err:
@@ -108,9 +116,7 @@ class InimAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> FlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle reauthorization."""
         return await self.async_step_reauth_confirm()
 
@@ -122,7 +128,7 @@ class InimAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             reauth_entry = self._get_reauth_entry()
-            
+
             try:
                 await validate_input(
                     self.hass,
@@ -164,7 +170,7 @@ class InvalidAuth(Exception):
 
 class InimAlarmOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for INIM Alarm.
-    
+
     Options only include polling interval - scenarios are no longer needed
     since the main panel uses InsertAreas API directly.
     """
@@ -178,14 +184,34 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
 
         # Get current values
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
+        current_enable_sia = self.config_entry.options.get(
+            CONF_ENABLE_SIA, self.config_entry.data.get(CONF_ENABLE_SIA, False)
+        )
+        current_sia_port = self.config_entry.options.get(
+            CONF_SIA_PORT, self.config_entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT)
+        )
+        current_sia_account = self.config_entry.options.get(
+            CONF_SIA_ACCOUNT, self.config_entry.data.get(CONF_SIA_ACCOUNT, "")
+        )
 
-        # Only polling interval - no more scenario configuration
         options_schema = vol.Schema(
             {
                 vol.Required(
                     CONF_SCAN_INTERVAL,
                     default=current_scan,
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Optional(
+                    CONF_ENABLE_SIA,
+                    default=current_enable_sia,
+                ): bool,
+                vol.Optional(
+                    CONF_SIA_PORT,
+                    default=current_sia_port,
+                ): cv.port,
+                vol.Optional(
+                    CONF_SIA_ACCOUNT,
+                    description={"suggested_value": current_sia_account},
+                ): str,
             }
         )
 

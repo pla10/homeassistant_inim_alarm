@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
@@ -20,14 +19,19 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
+    CONF_SIA_ACCOUNT,
+    CONF_SIA_PORT,
     CONF_USER_CODE,
+    DEFAULT_SIA_PORT,
     DOMAIN,
     PLATFORMS,
     SERVICE_ACTIVATE_SCENARIO,
     SERVICE_BYPASS_ZONE,
 )
 from .coordinator import InimDataUpdateCoordinator
+from .sia_server import async_start_sia_server
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +43,7 @@ DEFAULT_SCAN_INTERVAL_SECONDS = 30
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up INIM Alarm from a config entry."""
     session = async_get_clientsession(hass)
-    
+
     api = InimApi(
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
@@ -54,11 +58,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Failed to connect: {err}") from err
 
     # Get scan interval from options or use default
-    scan_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
+    scan_interval_seconds = entry.options.get(
+        CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS
+    )
     update_interval = timedelta(seconds=scan_interval_seconds)
 
     coordinator = InimDataUpdateCoordinator(hass, api, update_interval)
-    
+
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
@@ -69,14 +75,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "options": {
             CONF_SCAN_INTERVAL: scan_interval_seconds,
             # User code from entry.data (setup) with fallback to options (legacy)
-            CONF_USER_CODE: entry.data.get(CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")),
+            CONF_USER_CODE: entry.data.get(
+                CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")
+            ),
         },
     }
 
+    # Start WebSocket client for real-time updates
+    await coordinator.async_start_websocket()
+
+    # Start SIA server only if enabled
+    enable_sia = entry.options.get(
+        CONF_ENABLE_SIA, entry.data.get(CONF_ENABLE_SIA, False)
+    )
+    if enable_sia:
+        sia_port = entry.options.get(
+            CONF_SIA_PORT, entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT)
+        )
+        sia_account = entry.options.get(
+            CONF_SIA_ACCOUNT, entry.data.get(CONF_SIA_ACCOUNT)
+        )
+
+        try:
+            sia_server = await async_start_sia_server(
+                hass, coordinator, sia_port, sia_account
+            )
+            hass.data[DOMAIN][entry.entry_id]["sia_server"] = sia_server
+        except Exception as err:
+            _LOGGER.error("Failed to start SIA server on port %s: %s", sia_port, err)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Start WebSocket for real-time updates
-    await coordinator.async_start_websocket()
 
     # Register services
     await async_register_services(hass)
@@ -99,6 +128,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = data.get("coordinator")
         if coordinator:
             await coordinator.async_stop_websocket()
+
+        sia_server = data.get("sia_server")
+        if sia_server:
+            sia_server.close()
+            await sia_server.wait_closed()
+
         api: InimApi = data["api"]
         await api.close()
 
@@ -131,7 +166,7 @@ SERVICE_ACTIVATE_SCENARIO_SCHEMA = vol.Schema(
 
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register services for INIM Alarm."""
-    
+
     if hass.services.has_service(DOMAIN, SERVICE_BYPASS_ZONE):
         return  # Already registered
 
@@ -149,7 +184,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
                 # Use provided code or get from options
                 if not user_code:
                     user_code = data.get("options", {}).get(CONF_USER_CODE, "")
-                
+
                 if not user_code:
                     _LOGGER.error(
                         "No user code provided. Set it in integration options or provide it in service call"
@@ -185,13 +220,17 @@ async def async_register_services(hass: HomeAssistant) -> None:
             if api:
                 try:
                     await api.activate_scenario(device_id, scenario_id)
-                    _LOGGER.info("Activated scenario %s on device %s", scenario_id, device_id)
+                    _LOGGER.info(
+                        "Activated scenario %s on device %s", scenario_id, device_id
+                    )
                     # Refresh data after scenario change
                     coordinator = data.get("coordinator")
                     if coordinator:
                         await coordinator.async_request_refresh()
                 except InimApiError as err:
-                    _LOGGER.error("Failed to activate scenario %s: %s", scenario_id, err)
+                    _LOGGER.error(
+                        "Failed to activate scenario %s: %s", scenario_id, err
+                    )
                 return
 
         _LOGGER.error("No INIM Alarm API found")

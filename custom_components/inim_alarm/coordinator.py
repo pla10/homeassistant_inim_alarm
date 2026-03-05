@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -45,7 +45,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=update_interval,
         )
         self.api = api
-        self._ws_client = InimWebSocketClient(api, self._on_websocket_update)
+        self._ws_client = InimWebSocketClient(api, self._async_on_websocket_update)
         self._devices: list[dict[str, Any]] = []
         # Track previous alarm state for event triggering
         self._previous_alarm_states: dict[tuple[int, int], bool] = {}
@@ -73,37 +73,47 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except InimAuthError as err:
                         _LOGGER.debug(
                             "RequestPoll auth error for device %s: %s, token was refreshed",
-                            device_id, err,
+                            device_id,
+                            err,
                         )
                         # Token was refreshed inside request_poll, retry once
                         try:
                             await self.api.request_poll(device_id)
-                            _LOGGER.debug("Requested poll for device %s after re-auth", device_id)
+                            _LOGGER.debug(
+                                "Requested poll for device %s after re-auth", device_id
+                            )
                             poll_requested = True
                         except Exception as retry_err:
-                            _LOGGER.warning("RequestPoll retry failed for device %s: %s", device_id, retry_err)
+                            _LOGGER.warning(
+                                "RequestPoll retry failed for device %s: %s",
+                                device_id,
+                                retry_err,
+                            )
                     except Exception as err:
-                        _LOGGER.debug("RequestPoll failed for device %s: %s", device_id, err)
-            
+                        _LOGGER.debug(
+                            "RequestPoll failed for device %s: %s", device_id, err
+                        )
+
             # Wait for central to send data to cloud (5 seconds required)
             if poll_requested:
                 import asyncio
+
                 await asyncio.sleep(5)
-            
+
             # Now get devices with all data (should have fresh state)
             devices = await self.api.get_devices()
-            
+
             if not devices:
                 _LOGGER.warning("No devices found in INIM Cloud")
                 return {"devices": []}
-            
+
             self._devices = devices
-            
+
             # Build a structured data response
             data: dict[str, Any] = {
                 "devices": [],
             }
-            
+
             for device in devices:
                 device_data = {
                     "device_id": device.get("DeviceId"),
@@ -123,12 +133,12 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "blinds": device.get("Blinds", []),
                 }
                 data["devices"].append(device_data)
-            
+
             _LOGGER.debug("Updated data for %d devices", len(data["devices"]))
-            
+
             # Check for alarm state changes and fire events
             self._check_alarm_triggered(data)
-            
+
             return data
 
         except InimAuthError as err:
@@ -196,22 +206,24 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             device_id = device.get("device_id")
             if not device_id:
                 continue
-            
+
             for area in device.get("areas", []):
                 area_id = area.get("AreaId")
                 area_name = area.get("Name", f"Area {area_id}")
                 current_alarm = area.get("Alarm", False)
                 current_armed = area.get("Armed", 4)  # 4 = disarmed
-                
+
                 key = (device_id, area_id)
                 previous_alarm = self._previous_alarm_states.get(key, False)
                 previous_armed = self._previous_armed_states.get(key)
-                
+
                 # Fire event if alarm just triggered (false -> true)
                 if current_alarm and not previous_alarm:
                     _LOGGER.warning(
                         "ALARM TRIGGERED! Device: %s, Area: %s (%s)",
-                        device_id, area_id, area_name
+                        device_id,
+                        area_id,
+                        area_name,
                     )
                     self.hass.bus.async_fire(
                         EVENT_ALARM_TRIGGERED,
@@ -222,15 +234,18 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "area_name": area_name,
                         },
                     )
-                
+
                 # Check for armed state changes and determine source
                 if previous_armed is not None and current_armed != previous_armed:
                     self._handle_armed_state_change(
-                        device_id, area_id, area_name, 
+                        device_id,
+                        area_id,
+                        area_name,
                         device.get("name", "INIM Alarm"),
-                        previous_armed, current_armed
+                        previous_armed,
+                        current_armed,
                     )
-                
+
                 # Update state tracking
                 self._previous_alarm_states[key] = current_alarm
                 self._previous_armed_states[key] = current_armed
@@ -246,48 +261,52 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Handle armed state change and determine source."""
         now = dt_util.now()
-        
+
         # Check if we have a pending HA command for this area
         entity_key_area = f"{device_id}_area_{area_id}"
         entity_key_main = f"{device_id}_alarm"
-        
+
         pending_key_area = (device_id, area_id)
         pending_key_main = (device_id, None)
-        
+
         # Check if there's a pending HA command (within last 60 seconds)
         is_ha_command = False
         pending_time = None
-        
+
         if pending_key_area in self._pending_ha_commands:
             pending_time = self._pending_ha_commands[pending_key_area]
             if (now - pending_time).total_seconds() < 60:
                 is_ha_command = True
                 del self._pending_ha_commands[pending_key_area]
-        
+
         if not is_ha_command and pending_key_main in self._pending_ha_commands:
             pending_time = self._pending_ha_commands[pending_key_main]
             if (now - pending_time).total_seconds() < 60:
                 is_ha_command = True
                 # Don't delete main panel pending - it might apply to multiple areas
-        
+
         # Determine the source - if HA command pending, it's from HA
         changed_by = CHANGED_BY_HOME_ASSISTANT if is_ha_command else CHANGED_BY_EXTERNAL
-        
+
         # Store change info for both area and main panel entities
         self._last_changed_by[entity_key_area] = changed_by
         self._last_changed_at[entity_key_area] = now
         self._last_changed_by[entity_key_main] = changed_by
         self._last_changed_at[entity_key_main] = now
-        
+
         # Determine state names for logging
         state_from = "armed" if previous_armed != 4 else "disarmed"
         state_to = "armed" if current_armed != 4 else "disarmed"
-        
+
         _LOGGER.info(
             "Alarm state changed: %s -> %s (Area: %s, Device: %s, Source: %s)",
-            state_from, state_to, area_name, device_name, changed_by
+            state_from,
+            state_to,
+            area_name,
+            device_name,
+            changed_by,
         )
-        
+
         # Fire event
         self.hass.bus.async_fire(
             EVENT_STATE_CHANGED,
@@ -305,14 +324,16 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def register_ha_command(self, device_id: int, area_id: int | None = None) -> None:
         """Register that a command was sent from Home Assistant.
-        
+
         Args:
             device_id: The device ID
             area_id: The area ID (None for main panel affecting all areas)
         """
         key = (device_id, area_id)
         self._pending_ha_commands[key] = dt_util.now()
-        _LOGGER.debug("Registered HA command for device %s, area %s", device_id, area_id)
+        _LOGGER.debug(
+            "Registered HA command for device %s, area %s", device_id, area_id
+        )
 
     def clear_main_panel_pending(self, device_id: int) -> None:
         """Clear the pending command for main panel after all areas processed."""
@@ -328,29 +349,24 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get the last changed at timestamp for an entity."""
         return self._last_changed_at.get(entity_key)
 
-    async def async_start_websocket(self) -> None:
-        """Start the WebSocket client for real-time updates."""
-        await self._ws_client.start()
+    def _async_on_websocket_update(self, event_data: dict[str, Any] | Any) -> None:
+        """Handle real-time updates from WebSocket."""
+        _LOGGER.debug("Handling WS update data: %s", event_data)
 
-    async def async_stop_websocket(self) -> None:
-        """Stop the WebSocket client."""
-        await self._ws_client.stop()
-
-    def _on_websocket_update(self, event_data: dict[str, Any]) -> None:
-        """Handle real-time updates from WebSocket.
-
-        Patches current coordinator data in-place with zone/area updates
-        and notifies listeners only when changes are detected.
-        Uses Device_Id from the WS payload to match the correct device.
-        """
-        if not self.data or not isinstance(event_data, dict):
+        if not isinstance(event_data, dict):
+            _LOGGER.debug(
+                "Event data is not a dict. Requesting poll to get fresh state."
+            )
+            # Request a poll because something happened (e.g. DISARM_AREA) but without AreaList
+            self.hass.async_create_task(self.async_request_refresh())
             return
 
-        if "devices" not in self.data:
+        if not self.data or "devices" not in self.data:
             return
 
         has_changes = False
 
+        # Helper to find device in self.data by ID
         def find_device(dev_id: int) -> dict[str, Any] | None:
             for d in self.data.get("devices", []):
                 if d.get("device_id") == dev_id:
@@ -362,6 +378,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zone_id = zone_update.get("ZoneId")
             if not device_id or zone_id is None:
                 continue
+
             device = find_device(device_id)
             if device:
                 for idx, zone in enumerate(device.get("zones", [])):
@@ -375,6 +392,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_id = area_update.get("AreaId")
             if not device_id or area_id is None:
                 continue
+
             device = find_device(device_id)
             if device:
                 for idx, area in enumerate(device.get("areas", [])):
@@ -387,6 +405,94 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Applying partial updates from WebSocket")
             self._check_alarm_triggered(self.data)
             self.async_set_updated_data(self.data)
+
+    @callback
+    def async_on_sia_update(self, zone_id: int, status_update: dict[str, Any]) -> None:
+        """Handle real-time updates from SIA-IP."""
+        # Look up zone name for better logging
+        zone_name = f"Zone {zone_id}"
+        if self.data and "devices" in self.data:
+            for device in self.data["devices"]:
+                for zone in device.get("zones", []):
+                    if zone.get("ZoneId") == zone_id:
+                        zone_name = zone.get("Name", zone_name)
+                        break
+
+        _LOGGER.debug(
+            "Handling SIA update data for '%s' (Zone %s): %s",
+            zone_name,
+            zone_id,
+            status_update,
+        )
+
+        if not self.data or "devices" not in self.data:
+            return
+
+        has_changes = False
+
+        for device in self.data.get("devices", []):
+            for idx, zone in enumerate(device.get("zones", [])):
+                if zone.get("ZoneId") == zone_id:
+                    device["zones"][idx].update(status_update)
+                    has_changes = True
+                    break
+            if has_changes:
+                break
+
+        if has_changes:
+            _LOGGER.debug("Applying partial updates from SIA and refreshing entities")
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
+    @callback
+    def async_on_sia_area_update(
+        self, area_id: int, status_update: dict[str, Any]
+    ) -> None:
+        """Handle real-time area updates from SIA-IP."""
+        # Look up area name for better logging
+        area_name = f"Area {area_id}"
+        if self.data and "devices" in self.data:
+            for device in self.data["devices"]:
+                for area in device.get("areas", []):
+                    if area.get("AreaId") == area_id:
+                        area_name = area.get("Name", area_name)
+                        break
+
+        _LOGGER.debug(
+            "Handling SIA update data for '%s' (Area %s): %s",
+            area_name,
+            area_id,
+            status_update,
+        )
+
+        if not self.data or "devices" not in self.data:
+            return
+
+        has_changes = False
+
+        for device in self.data.get("devices", []):
+            for idx, area in enumerate(device.get("areas", [])):
+                if area.get("AreaId") == area_id:
+                    device["areas"][idx].update(status_update)
+                    has_changes = True
+                    break
+            if has_changes:
+                break
+
+        if has_changes:
+            _LOGGER.debug(
+                "Applying partial area updates from SIA and refreshing entities"
+            )
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
+    async def async_start_websocket(self) -> None:
+        """Start listening for WebSocket events."""
+        await self._ws_client.start()
+
+    async def async_stop_websocket(self) -> None:
+        """Stop listening for WebSocket events."""
+        await self._ws_client.stop()
 
     @property
     def devices(self) -> list[dict[str, Any]]:

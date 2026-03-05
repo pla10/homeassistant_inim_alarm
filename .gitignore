@@ -78,3 +78,7 @@ Thumbs.db
 *.log
 home-assistant.log*
 home-assistant_v2.db*
+tmp
+
+# Debug/dump scripts with secrets
+dump_zones.py

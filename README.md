@@ -24,7 +24,9 @@ A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, 
 - 🔋 **Peripheral Sensors** - Monitor voltage of keypads, expanders, and modules
 - 📶 **GSM/Nexus Sensor** - Monitor cellular module (operator, signal strength, 4G status)
 - 🎬 **Scenario Buttons** - Quick buttons to activate any scenario (disabled by default for security)
-- ⚙️ **Configurable Options** - Customize polling interval
+- ⚡ **Real-time Updates** - Instant state changes for zones, areas and alarms via WebSocket (no polling delay)
+- 📡 **SIA-IP Local Listener (Optional)** - Receive instant raw zone/area updates directly from the panel, bypassing the cloud.
+- ⚙️ **Configurable Polling interval** - Polling interval (acts as a robust fallback)
 - 🔄 **Automatic token refresh** - Handles token expiration automatically
 - 🌍 **Multi-language** - English and Italian translations
 
@@ -79,16 +81,47 @@ This integration works with INIM alarm panels connected to INIM Cloud:
 
 Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| **Polling Interval** | How often to update (10-300 seconds) | 30 seconds |
+| Option                | Description                            | Default    |
+| --------------------- | -------------------------------------- | ---------- |
+| **Polling Interval**  | How often to update (10-300 seconds)   | 30 seconds |
+| **Enable SIA Server** | Enable the optional local SIA listener | False      |
+| **SIA Port**          | Port to listen on for SIA events       | 6001       |
+| **SIA Account**       | The SIA account ID matching the panel  | (empty)    |
+
+## 📡 SIA-IP Configuration (Optional)
+
+**What is SIA-IP?**
+SIA-IP is a standard protocol used by security panels to send events to alarm receiving centers. By enabling the SIA-IP listener in this integration, your Inim panel can send instant event notifications (like zone openings or area arming) directly to Home Assistant over your local network. This makes sensor updates **substantially faster** than relying on cloud polling or WebSockets.
+
+**How to configure Inim:**
+To use this feature, you must configure your Inim SmartLiving or Prime panel to send SIA-IP events to Home Assistant:
+
+1. Open **SmartLeague** or your panel's programming interface.
+2. Go to the **Telephony/Communicator** section and configure a new receiver/channel.
+3. Set the type to **SIA-IP**.
+4. Enter the **IP Address** of your Home Assistant server.
+5. Enter the **Port** (default `6001`).
+6. Set an **Account Code** (e.g. `123456`).
+7. Make sure to assign the relevant events (Zone Alarm, Zone Restore, Area Arm, Area Disarm) to be sent to this channel.
+
+![SIA-IP Configuration](images/sia-ip.png)
+
+**How to configure Home Assistant:**
+
+1. Go to the INIM Alarm integration options in Home Assistant.
+2. Check the **Enable SIA Server** box.
+3. Verify the **SIA Port** matches your panel (default `6001`).
+4. (Optional) Enter the **SIA Account** to filter out unknown devices.
+
+> **Note:** Currently, we do not support SIA encryption as there hasn't been a need for it in typical local setups. If any user feels this feature is necessary, please request it by opening an issue.
 
 ## 🏠 Entities Created
 
 ### Alarm Control Panels
-| Entity | Description |
-|--------|-------------|
-| `alarm_control_panel.<name>` | Main alarm control (arms/disarms ALL areas) |
+
+| Entity                            | Description                                  |
+| --------------------------------- | -------------------------------------------- |
+| `alarm_control_panel.<name>`      | Main alarm control (arms/disarms ALL areas)  |
 | `alarm_control_panel.<area_name>` | Area-specific control (e.g., Perimetrale PT) |
 
 **Main panel** - Arms/disarms all configured areas at once. Simple UX with only Armed Away / Disarmed states.
@@ -96,37 +129,43 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 **Area panels** - Control individual areas independently.
 
 ### Binary Sensors (Zones)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                        | Description               |
+| ----------------------------- | ------------------------- |
 | `binary_sensor.<name>_<zone>` | Zone status (open/closed) |
 
 **Attributes:** alarm_memory, tamper_memory, bypassed, output_on
 
 ### Switches (Zone Bypass)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                        | Description             |
+| ----------------------------- | ----------------------- |
 | `switch.<name>_bypass_<zone>` | Bypass/reinstate a zone |
 
 ### Sensors (Area Status)
-| Entity | Description |
-|--------|-------------|
+
+| Entity                 | Description                                        |
+| ---------------------- | -------------------------------------------------- |
 | `sensor.<name>_<area>` | Area armed status (armed, armed_partial, disarmed) |
 
 ### Sensors (System)
-| Entity | Description |
-|--------|-------------|
-| `sensor.<name>_voltage` | Central unit voltage |
+
+| Entity                               | Description                             |
+| ------------------------------------ | --------------------------------------- |
+| `sensor.<name>_voltage`              | Central unit voltage                    |
 | `sensor.<name>_<peripheral>_voltage` | Peripheral voltage (keypads, expanders) |
-| `sensor.<name>_nexus_gsm` | GSM module info |
+| `sensor.<name>_nexus_gsm`            | GSM module info                         |
 
 **GSM Attributes:** signal_strength, operator, IMEI, is_4g, has_gprs, battery_charge
 
 ### Buttons (Scenarios) ⚠️
-| Entity | Description |
-|--------|-------------|
+
+| Entity                              | Description                  |
+| ----------------------------------- | ---------------------------- |
 | `button.<name>_scenario_<scenario>` | Activate a specific scenario |
 
 > **⚠️ Security Warning:** Scenario buttons are **disabled by default** because they don't require PIN confirmation. To enable them:
+>
 > 1. Go to Settings → Devices & Services → INIM Alarm
 > 2. Click on the device
 > 3. Show disabled entities
@@ -141,7 +180,7 @@ type: alarm-panel
 entity: alarm_control_panel.your_alarm
 states:
   - arm_away
-require_code: true  # Shows numeric keypad
+require_code: true # Shows numeric keypad
 ```
 
 > **Note:** The keypad code is managed by Lovelace, not the integration.
@@ -182,6 +221,7 @@ data:
 ## 🤖 Example Automations
 
 ### Arm when everyone leaves
+
 ```yaml
 automation:
   - alias: "Arm alarm when leaving"
@@ -196,6 +236,7 @@ automation:
 ```
 
 ### Arm only ground floor at night
+
 ```yaml
 automation:
   - alias: "Arm ground floor at night"
@@ -209,6 +250,7 @@ automation:
 ```
 
 ### Alert on window open while armed
+
 ```yaml
 automation:
   - alias: "Window opened while armed"
@@ -229,6 +271,7 @@ automation:
 ```
 
 ### Monitor low voltage
+
 ```yaml
 automation:
   - alias: "Low voltage warning"
@@ -253,18 +296,22 @@ automation:
 ## 🐛 Troubleshooting
 
 ### Cannot connect
+
 - Verify credentials work in Inim Home app
 - Check internet connection
 
 ### Entities not updating
+
 - Check polling interval in options
 - Enable debug logging (see below)
 
 ### Arm/Disarm not working
+
 - Delete and re-add the integration
 - Make sure to enter the user code during setup
 
 ### Debug Logging
+
 ```yaml
 logger:
   logs:
