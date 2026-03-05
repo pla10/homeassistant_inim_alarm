@@ -37,12 +37,18 @@
     "step": {
       "init": {
         "title": "INIM Alarm Options",
-        "description": "Configure polling interval.",
+        "description": "Configure polling interval and SIA-IP local listener.",
         "data": {
-          "scan_interval": "Polling interval (seconds)"
+          "scan_interval": "Polling interval (seconds)",
+          "enable_sia": "Enable SIA-IP listener",
+          "sia_port": "SIA-IP port",
+          "sia_account": "SIA Account ID (optional)"
         },
         "data_description": {
-          "scan_interval": "How often to poll for updates (10-300 seconds)"
+          "scan_interval": "How often to poll for updates (10-300 seconds)",
+          "enable_sia": "Enable local SIA-IP TCP listener for real-time updates from the panel",
+          "sia_port": "TCP port for the SIA-IP listener (default: 6001)",
+          "sia_account": "Filter messages by SIA account ID. Leave empty to accept all."
         }
       }
     }

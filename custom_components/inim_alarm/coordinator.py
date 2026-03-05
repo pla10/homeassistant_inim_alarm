@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -343,10 +343,12 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         and notifies listeners only when changes are detected.
         Uses Device_Id from the WS payload to match the correct device.
         """
-        if not self.data or not isinstance(event_data, dict):
+        if not isinstance(event_data, dict):
+            _LOGGER.debug("WS event is not a dict, requesting poll for fresh state")
+            self.hass.async_create_task(self.async_request_refresh())
             return
 
-        if "devices" not in self.data:
+        if not self.data or "devices" not in self.data:
             return
 
         has_changes = False
@@ -385,6 +387,54 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if has_changes:
             _LOGGER.debug("Applying partial updates from WebSocket")
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
+    @callback
+    def async_on_sia_update(self, zone_id: int, status_update: dict[str, Any]) -> None:
+        """Handle real-time zone updates from SIA-IP."""
+        if not self.data or "devices" not in self.data:
+            return
+
+        has_changes = False
+        for device in self.data.get("devices", []):
+            for idx, zone in enumerate(device.get("zones", [])):
+                if zone.get("ZoneId") == zone_id:
+                    device["zones"][idx].update(status_update)
+                    has_changes = True
+                    _LOGGER.debug(
+                        "SIA update zone %s: %s", zone.get("Name", zone_id), status_update
+                    )
+                    break
+            if has_changes:
+                break
+
+        if has_changes:
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
+    @callback
+    def async_on_sia_area_update(
+        self, area_id: int, status_update: dict[str, Any]
+    ) -> None:
+        """Handle real-time area updates from SIA-IP."""
+        if not self.data or "devices" not in self.data:
+            return
+
+        has_changes = False
+        for device in self.data.get("devices", []):
+            for idx, area in enumerate(device.get("areas", [])):
+                if area.get("AreaId") == area_id:
+                    device["areas"][idx].update(status_update)
+                    has_changes = True
+                    _LOGGER.debug(
+                        "SIA update area %s: %s", area.get("Name", area_id), status_update
+                    )
+                    break
+            if has_changes:
+                break
+
+        if has_changes:
             self._check_alarm_triggered(self.data)
             self.async_set_updated_data(self.data)
 

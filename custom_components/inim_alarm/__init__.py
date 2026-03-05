@@ -20,20 +20,27 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
+    CONF_SIA_ACCOUNT,
+    CONF_SIA_PORT,
     CONF_USER_CODE,
+    DEFAULT_SIA_PORT,
     DOMAIN,
     PLATFORMS,
     SERVICE_ACTIVATE_SCENARIO,
     SERVICE_BYPASS_ZONE,
 )
 from .coordinator import InimDataUpdateCoordinator
+from .sia_server import async_start_sia_server
 
 _LOGGER = logging.getLogger(__name__)
 
 # PLATFORMS imported from const.py includes: alarm_control_panel, binary_sensor, button, sensor, switch
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 30
+# When SIA-IP is active, polling is only a fallback for state reconciliation
+SIA_FALLBACK_SCAN_INTERVAL_SECONDS = 300
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -54,7 +61,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Failed to connect: {err}") from err
 
     # Get scan interval from options or use default
+    sia_enabled = entry.options.get(CONF_ENABLE_SIA) or entry.data.get(CONF_ENABLE_SIA)
     scan_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS)
+    if sia_enabled and scan_interval_seconds <= DEFAULT_SCAN_INTERVAL_SECONDS:
+        # SIA-IP provides real-time local updates, polling is just a fallback
+        scan_interval_seconds = SIA_FALLBACK_SCAN_INTERVAL_SECONDS
+        _LOGGER.info(
+            "SIA-IP enabled: polling interval raised to %ds (fallback only)",
+            scan_interval_seconds,
+        )
     update_interval = timedelta(seconds=scan_interval_seconds)
 
     coordinator = InimDataUpdateCoordinator(hass, api, update_interval)
@@ -78,6 +93,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start WebSocket for real-time updates
     await coordinator.async_start_websocket()
 
+    # Start SIA-IP server if enabled
+    sia_server = None
+    if entry.options.get(CONF_ENABLE_SIA) or entry.data.get(CONF_ENABLE_SIA):
+        sia_port = (
+            entry.options.get(CONF_SIA_PORT)
+            or entry.data.get(CONF_SIA_PORT)
+            or DEFAULT_SIA_PORT
+        )
+        sia_account = entry.options.get(CONF_SIA_ACCOUNT) or entry.data.get(CONF_SIA_ACCOUNT)
+        try:
+            sia_server = await async_start_sia_server(
+                hass, coordinator, sia_port, sia_account or None
+            )
+            _LOGGER.info("SIA-IP server started on port %s", sia_port)
+        except OSError as err:
+            _LOGGER.error("Failed to start SIA-IP server on port %s: %s", sia_port, err)
+
+    hass.data[DOMAIN][entry.entry_id]["sia_server"] = sia_server
+
     # Register services
     await async_register_services(hass)
 
@@ -99,6 +133,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = data.get("coordinator")
         if coordinator:
             await coordinator.async_stop_websocket()
+        sia_server = data.get("sia_server")
+        if sia_server:
+            sia_server.close()
+            await sia_server.wait_closed()
+            _LOGGER.info("SIA-IP server stopped")
         api: InimApi = data["api"]
         await api.close()
 

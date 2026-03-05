@@ -37,12 +37,18 @@
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
-        "description": "Configura l'intervallo di polling.",
+        "description": "Configura l'intervallo di polling e il listener SIA-IP locale.",
         "data": {
-          "scan_interval": "Intervallo di polling (secondi)"
+          "scan_interval": "Intervallo di polling (secondi)",
+          "enable_sia": "Abilita listener SIA-IP",
+          "sia_port": "Porta SIA-IP",
+          "sia_account": "Account SIA (opzionale)"
         },
         "data_description": {
-          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)"
+          "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
+          "enable_sia": "Abilita il listener TCP SIA-IP locale per aggiornamenti in tempo reale dal pannello",
+          "sia_port": "Porta TCP per il listener SIA-IP (default: 6001)",
+          "sia_account": "Filtra messaggi per ID account SIA. Lascia vuoto per accettare tutti."
         }
       }
     }

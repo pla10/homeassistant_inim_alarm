@@ -14,6 +14,12 @@ CONF_SCAN_INTERVAL = "scan_interval"
 # CONF_DISARM_SCENARIO = "disarm_scenario"
 CONF_USER_CODE = "user_code"
 
+# SIA-IP configuration
+CONF_ENABLE_SIA = "enable_sia"
+CONF_SIA_PORT = "sia_port"
+CONF_SIA_ACCOUNT = "sia_account"
+DEFAULT_SIA_PORT = 6001
+
 # API
 API_BASE_URL = "https://api.inimcloud.com/"
 API_HEADERS = {

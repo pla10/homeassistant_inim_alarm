@@ -14,9 +14,15 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
+from homeassistant.helpers import config_validation as cv
+
 from .const import (
+    CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
+    CONF_SIA_ACCOUNT,
+    CONF_SIA_PORT,
     CONF_USER_CODE,
+    DEFAULT_SIA_PORT,
     DOMAIN,
 )
 
@@ -179,13 +185,37 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         # Get current values
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
 
-        # Only polling interval - no more scenario configuration
+        current_sia = self.config_entry.options.get(
+            CONF_ENABLE_SIA,
+            self.config_entry.data.get(CONF_ENABLE_SIA, False),
+        )
+        current_sia_port = self.config_entry.options.get(
+            CONF_SIA_PORT,
+            self.config_entry.data.get(CONF_SIA_PORT, DEFAULT_SIA_PORT),
+        )
+        current_sia_account = self.config_entry.options.get(
+            CONF_SIA_ACCOUNT,
+            self.config_entry.data.get(CONF_SIA_ACCOUNT, ""),
+        )
+
         options_schema = vol.Schema(
             {
                 vol.Required(
                     CONF_SCAN_INTERVAL,
                     default=current_scan,
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Optional(
+                    CONF_ENABLE_SIA,
+                    default=current_sia,
+                ): bool,
+                vol.Optional(
+                    CONF_SIA_PORT,
+                    default=current_sia_port,
+                ): cv.port,
+                vol.Optional(
+                    CONF_SIA_ACCOUNT,
+                    default=current_sia_account,
+                ): str,
             }
         )
 
