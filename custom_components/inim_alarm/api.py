@@ -345,6 +345,20 @@ class InimApi:
         return self._devices
 
     @property
+    def token(self) -> str | None:
+        """Return the current auth token."""
+        return self._token
+
+    @property
+    def client_id(self) -> str:
+        """Return the client ID."""
+        return self._client_id
+
+    async def get_session(self) -> aiohttp.ClientSession:
+        """Get the aiohttp session (public, used by WebSocket client)."""
+        return await self._get_session()
+
+    @property
     def is_authenticated(self) -> bool:
         """Return if we have a valid token."""
         return self._token is not None

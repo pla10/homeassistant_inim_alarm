@@ -75,6 +75,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Start WebSocket for real-time updates
+    await coordinator.async_start_websocket()
+
     # Register services
     await async_register_services(hass)
 
@@ -93,6 +96,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         data = hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator: InimDataUpdateCoordinator = data["coordinator"]
+        await coordinator.async_stop_websocket()
         api: InimApi = data["api"]
         await api.close()
 

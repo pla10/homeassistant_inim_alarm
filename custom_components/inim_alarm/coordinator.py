@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import InimApi, InimApiError, InimAuthError
+from .websocket import InimWebSocketClient
 from .const import (
     CHANGED_BY_EXTERNAL,
     CHANGED_BY_HOME_ASSISTANT,
@@ -44,6 +45,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=update_interval,
         )
         self.api = api
+        self._ws_client = InimWebSocketClient(api, self._on_websocket_update)
         self._devices: list[dict[str, Any]] = []
         # Track previous alarm state for event triggering
         self._previous_alarm_states: dict[tuple[int, int], bool] = {}
@@ -325,6 +327,60 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_last_changed_at(self, entity_key: str) -> datetime | None:
         """Get the last changed at timestamp for an entity."""
         return self._last_changed_at.get(entity_key)
+
+    async def async_start_websocket(self) -> None:
+        """Start the WebSocket client for real-time updates."""
+        await self._ws_client.start()
+
+    async def async_stop_websocket(self) -> None:
+        """Stop the WebSocket client."""
+        await self._ws_client.stop()
+
+    def _on_websocket_update(self, event_data: dict[str, Any]) -> None:
+        """Handle real-time updates from WebSocket.
+
+        Patches current coordinator data in-place with zone/area updates
+        and notifies listeners immediately.
+        """
+        if not self.data:
+            return
+
+        zone_list = event_data.get("ZoneList", [])
+        area_list = event_data.get("AreaList", [])
+
+        if not zone_list and not area_list:
+            return
+
+        _LOGGER.debug(
+            "WebSocket update: %d zones, %d areas",
+            len(zone_list),
+            len(area_list),
+        )
+
+        for device in self.data.get("devices", []):
+            if zone_list:
+                zones = device.get("zones", [])
+                for zone_update in zone_list:
+                    zone_id = zone_update.get("ZoneId")
+                    for idx, zone in enumerate(zones):
+                        if zone.get("ZoneId") == zone_id:
+                            zones[idx].update(zone_update)
+                            break
+
+            if area_list:
+                areas = device.get("areas", [])
+                for area_update in area_list:
+                    area_id = area_update.get("AreaId")
+                    for idx, area in enumerate(areas):
+                        if area.get("AreaId") == area_id:
+                            areas[idx].update(area_update)
+                            break
+
+        # Check for alarm/state changes from this WS update
+        self._check_alarm_triggered(self.data)
+
+        # Push updated data to all listeners
+        self.async_set_updated_data(self.data)
 
     @property
     def devices(self) -> list[dict[str, Any]]:
