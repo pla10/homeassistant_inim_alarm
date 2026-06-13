@@ -116,10 +116,17 @@ class InimWebSocketClient:
 
     def _handle_message(self, text: str) -> None:
         """Parse and dispatch a WebSocket message."""
+        # The cloud answers our keep-alive ("@ ") with a non-JSON frame.
+        # Ignore these (and any other non-JSON keep-alive) instead of logging.
+        stripped = text.strip()
+        if not stripped or not stripped.startswith(("{", "[")):
+            _LOGGER.debug("Ignoring non-JSON WS frame: %r", text)
+            return
+
         try:
-            data = json.loads(text)
+            data = json.loads(stripped)
         except json.JSONDecodeError as err:
-            _LOGGER.error("Failed to parse WS message: %s", err)
+            _LOGGER.debug("Failed to parse WS message: %s", err)
             return
 
         msg_type = data.get("Type")
