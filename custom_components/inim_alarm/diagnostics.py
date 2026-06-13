@@ -48,8 +48,8 @@ async def async_get_config_entry_diagnostics(
     # Add API info
     if api:
         diagnostics_data["api_info"] = {
-            "authenticated": api._client_token is not None,
-            "client_id": "REDACTED" if api._client_id else None,
+            "authenticated": api.is_authenticated,
+            "client_id": "REDACTED" if api.client_id else None,
         }
     
     # Add coordinator data (redacted)
