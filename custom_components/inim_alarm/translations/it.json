@@ -34,9 +34,20 @@
     }
   },
   "options": {
+    "error": {
+      "mapping_required": "Seleziona almeno uno scenario oppure abilita Rimuovi mappatura."
+    },
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
+        "description": "Scegli quali impostazioni configurare.",
+        "menu_options": {
+          "general": "Impostazioni generali",
+          "area_scenarios": "Mappatura scenari per area"
+        }
+      },
+      "general": {
+        "title": "Impostazioni generali",
         "description": "Configura polling, SIA-IP, mappatura degli scenari e modalita di inserimento delle aree.",
         "data": {
           "scan_interval": "Intervallo di polling (secondi)",
@@ -57,6 +68,29 @@
           "arm_home_scenario": "Scenario del pannello da attivare per l'inserimento parziale (es. Notte/parziale). Lascia vuoto per inserire tutte le aree.",
           "disarm_scenario": "Scenario del pannello da attivare per il disinserimento. Lascia vuoto per disinserire tutte le aree.",
           "away_only_areas": "Aree che devono offrire solo Inserimento Totale, senza Inserimento Parziale."
+        }
+      },
+      "area_scenarios": {
+        "title": "Mappatura scenari per area",
+        "description": "Scegli un'area da configurare. Puoi riaprire questa schermata per configurare un'altra area.",
+        "data": {
+          "area": "Area"
+        }
+      },
+      "area_scenario": {
+        "title": "Scenari per {area_name}",
+        "description": "Associa ogni azione a uno scenario esplicito del pannello. Lascia vuote le azioni per mantenere il fallback InsertAreas.",
+        "data": {
+          "arm_away_scenario": "Scenario Inserimento Totale",
+          "arm_home_scenario": "Scenario Inserimento Parziale",
+          "disarm_scenario": "Scenario Disinserimento",
+          "remove_area_scenario_mapping": "Rimuovi mappatura"
+        },
+        "data_description": {
+          "arm_away_scenario": "Scenario da attivare quando l'area viene inserita in modalita Totale.",
+          "arm_home_scenario": "Scenario da attivare quando l'area viene inserita in modalita Parziale. Lascia vuoto per le aree solo Totale.",
+          "disarm_scenario": "Scenario da attivare quando l'area viene disinserita.",
+          "remove_area_scenario_mapping": "Elimina tutte le mappature esplicite per questa area."
         }
       }
     }

@@ -20,6 +20,7 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_SCENARIO_ID,
     ATTR_ZONE_ID,
+    CONF_AREA_SCENARIOS,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_AWAY_ONLY_AREAS,
@@ -94,6 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO),
             CONF_DISARM_SCENARIO: entry.options.get(CONF_DISARM_SCENARIO),
             CONF_AWAY_ONLY_AREAS: entry.options.get(CONF_AWAY_ONLY_AREAS, []),
+            CONF_AREA_SCENARIOS: entry.options.get(CONF_AREA_SCENARIOS, {}),
         },
     }
 

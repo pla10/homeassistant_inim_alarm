@@ -17,6 +17,9 @@ CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
 CONF_DISARM_SCENARIO = "disarm_scenario"
 CONF_USER_CODE = "user_code"
 CONF_AWAY_ONLY_AREAS = "away_only_areas"
+CONF_AREA = "area"
+CONF_AREA_SCENARIOS = "area_scenarios"
+CONF_REMOVE_AREA_SCENARIO_MAPPING = "remove_area_scenario_mapping"
 
 # SIA-IP configuration
 CONF_ENABLE_SIA = "enable_sia"
