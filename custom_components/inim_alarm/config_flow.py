@@ -19,6 +19,7 @@ from homeassistant.helpers import config_validation as cv, selector
 from .const import (
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
+    CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
     CONF_SCAN_INTERVAL,
@@ -172,11 +173,7 @@ class InvalidAuth(Exception):
 
 
 class InimAlarmOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for INIM Alarm.
-    
-    Options only include polling interval - scenarios are no longer needed
-    since the main panel uses InsertAreas API directly.
-    """
+    """Handle options flow for INIM Alarm."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -203,6 +200,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
 
         # Build the scenario list from the coordinator so users pick by name.
         scenario_options = self._build_scenario_options()
+        area_options = self._build_area_options()
 
         scenario_schema: dict[Any, Any] = {}
         if scenario_options:
@@ -225,6 +223,24 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 )
                 scenario_schema[field] = scenario_selector
 
+        area_schema: dict[Any, Any] = {}
+        if area_options:
+            current_away_only = self.config_entry.options.get(
+                CONF_AWAY_ONLY_AREAS, []
+            )
+            area_schema[
+                vol.Optional(
+                    CONF_AWAY_ONLY_AREAS,
+                    default=current_away_only,
+                )
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=area_options,
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+
         options_schema = vol.Schema(
             {
                 vol.Required(
@@ -244,6 +260,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     default=current_sia_account,
                 ): str,
                 **scenario_schema,
+                **area_schema,
             }
         )
 
@@ -271,6 +288,31 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                         selector.SelectOptionDict(
                             value=value,
                             label=scenario.get("Name", f"Scenario {scenario_id}"),
+                        )
+                    )
+        except (KeyError, AttributeError, TypeError):
+            pass
+        return options
+
+    def _build_area_options(self) -> list[selector.SelectOptionDict]:
+        """Return alarm areas as selector options (value=id, label=name)."""
+        options: list[selector.SelectOptionDict] = []
+        seen: set[str] = set()
+        try:
+            coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]["coordinator"]
+            for device in coordinator.data.get("devices", []):
+                for area in device.get("areas", []):
+                    area_id = area.get("AreaId")
+                    if area_id is None:
+                        continue
+                    value = str(area_id)
+                    if value in seen:
+                        continue
+                    seen.add(value)
+                    options.append(
+                        selector.SelectOptionDict(
+                            value=value,
+                            label=area.get("Name", f"Area {area_id}"),
                         )
                     )
         except (KeyError, AttributeError, TypeError):

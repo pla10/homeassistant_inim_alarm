@@ -37,7 +37,7 @@
     "step": {
       "init": {
         "title": "Opzioni INIM Alarm",
-        "description": "Configura l'intervallo di polling, il listener SIA-IP locale e la mappatura degli scenari.",
+        "description": "Configura polling, SIA-IP, mappatura degli scenari e modalita di inserimento delle aree.",
         "data": {
           "scan_interval": "Intervallo di polling (secondi)",
           "enable_sia": "Abilita listener SIA-IP",
@@ -45,7 +45,8 @@
           "sia_account": "Account SIA (opzionale)",
           "arm_away_scenario": "Scenario Inserimento Totale",
           "arm_home_scenario": "Scenario Inserimento Parziale",
-          "disarm_scenario": "Scenario Disinserimento"
+          "disarm_scenario": "Scenario Disinserimento",
+          "away_only_areas": "Aree solo inserimento totale"
         },
         "data_description": {
           "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
@@ -54,7 +55,8 @@
           "sia_account": "Filtra messaggi per ID account SIA. Lascia vuoto per accettare tutti.",
           "arm_away_scenario": "Scenario del pannello da attivare per l'inserimento totale (es. Totale). Lascia vuoto per inserire tutte le aree.",
           "arm_home_scenario": "Scenario del pannello da attivare per l'inserimento parziale (es. Notte/parziale). Lascia vuoto per inserire tutte le aree.",
-          "disarm_scenario": "Scenario del pannello da attivare per il disinserimento. Lascia vuoto per disinserire tutte le aree."
+          "disarm_scenario": "Scenario del pannello da attivare per il disinserimento. Lascia vuoto per disinserire tutte le aree.",
+          "away_only_areas": "Aree che devono offrire solo Inserimento Totale, senza Inserimento Parziale."
         }
       }
     }

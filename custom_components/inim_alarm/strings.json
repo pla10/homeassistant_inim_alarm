@@ -37,7 +37,7 @@
     "step": {
       "init": {
         "title": "INIM Alarm Options",
-        "description": "Configure polling interval, SIA-IP local listener and scenario mapping.",
+        "description": "Configure polling, SIA-IP, scenario mapping and area arming modes.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
           "enable_sia": "Enable SIA-IP listener",
@@ -45,7 +45,8 @@
           "sia_account": "SIA Account ID (optional)",
           "arm_away_scenario": "Armed Away scenario",
           "arm_home_scenario": "Armed Home scenario",
-          "disarm_scenario": "Disarm scenario"
+          "disarm_scenario": "Disarm scenario",
+          "away_only_areas": "Away-only areas"
         },
         "data_description": {
           "scan_interval": "How often to poll for updates (10-300 seconds)",
@@ -54,7 +55,8 @@
           "sia_account": "Filter messages by SIA account ID. Leave empty to accept all.",
           "arm_away_scenario": "Panel scenario to activate for Armed Away (e.g. Total). Leave empty to arm all areas.",
           "arm_home_scenario": "Panel scenario to activate for Armed Home (e.g. Night/partial). Leave empty to arm all areas.",
-          "disarm_scenario": "Panel scenario to activate for Disarm. Leave empty to disarm all areas."
+          "disarm_scenario": "Panel scenario to activate for Disarm. Leave empty to disarm all areas.",
+          "away_only_areas": "Areas that should offer Armed Away but not Armed Home."
         }
       }
     }

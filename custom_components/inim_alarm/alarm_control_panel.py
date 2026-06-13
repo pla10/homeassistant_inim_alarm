@@ -30,6 +30,7 @@ from .const import (
     ATTR_VOLTAGE,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
+    CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
@@ -381,6 +382,13 @@ class InimAreaAlarmControlPanel(
         # Track arming state and mode
         self._pending_state: AlarmControlPanelState | None = None
         self._armed_mode: str = "home"  # "home" or "away" - default to home
+
+        away_only_areas = {
+            str(value)
+            for value in self._options.get(CONF_AWAY_ONLY_AREAS, [])
+        }
+        if str(area_id) in away_only_areas:
+            self._attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
 
     @property
     def device_info(self) -> DeviceInfo:
