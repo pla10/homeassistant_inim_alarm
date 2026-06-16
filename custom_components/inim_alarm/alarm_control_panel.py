@@ -496,7 +496,7 @@ class InimAreaAlarmControlPanel(
         """Run an area action via its mapped scenario or InsertAreas fallback."""
         scenario_id = self._configured_scenario(conf_key)
         if scenario_id is not None:
-            self.coordinator.register_ha_command(self._device_id, self._area_id)
+            self.coordinator.register_ha_command(self._device_id, None)
             _LOGGER.info(
                 "%s area '%s' via scenario %s",
                 action,
