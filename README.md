@@ -101,6 +101,18 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | **Enable SIA-IP** | Enable local SIA-IP TCP listener | Off |
 | **SIA-IP Port** | TCP port for SIA-IP listener | 6001 |
 | **SIA Account ID** | Filter by SIA account (leave empty for all) | Empty |
+| **Armed Away / Armed Home / Disarm scenario** | Optional scenarios for the main alarm control | Empty |
+| **Away-only areas** | Areas that should offer Armed Away but not Armed Home | Empty |
+| **Per-area scenario mappings** | Optional scenario mappings for individual area controls | Empty |
+
+#### Scenario mappings
+
+Scenario mappings are optional. If no scenario is configured, the integration keeps using the `InsertAreas` API with your configured user code.
+
+The main alarm control and the individual area controls have separate scenario mappings, even though they use the same action names:
+
+- **Main alarm scenarios** apply to `alarm_control_panel.<name>` and are useful when one panel scenario should arm or disarm all configured areas.
+- **Per-area scenario mappings** apply to `alarm_control_panel.<area_name>` and are useful when a specific area needs its own explicit Away, Home, or Disarm scenario.
 
 ### SIA-IP Setup (Optional)
 
