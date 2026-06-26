@@ -273,6 +273,7 @@ class InimAlarmControlPanel(
                 "%s device %s via scenario %s", action, self._device_id, scenario_id
             )
             await self._api.activate_scenario(self._device_id, scenario_id)
+            self.coordinator.apply_expected_scenario(self._device_id, scenario_id)
             return True
 
         # Fallback: arm/disarm every configured area the same way
