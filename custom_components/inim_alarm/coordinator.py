@@ -25,6 +25,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+SCENARIO_STATE_GUARD_SECONDS = 12
+
 
 class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching INIM data."""
@@ -53,6 +55,9 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._previous_armed_states: dict[tuple[int, int], int] = {}
         # Track pending commands from Home Assistant
         self._pending_ha_commands: dict[tuple[int, int | None], datetime] = {}
+        # Track scenario states expected after a Home Assistant scenario command
+        self._expected_area_states: dict[int, dict[int, int]] = {}
+        self._expected_area_state_until: dict[int, datetime] = {}
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
@@ -125,6 +130,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data["devices"].append(device_data)
             
             _LOGGER.debug("Updated data for %d devices", len(data["devices"]))
+            self._apply_expected_area_states(data)
             
             # Check for alarm state changes and fire events
             self._check_alarm_triggered(data)
@@ -189,6 +195,160 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if active_id is not None:
             return self.get_scenario(device_id, active_id)
         return None
+
+    def apply_expected_scenario(self, device_id: int, scenario_id: int) -> None:
+        """Apply expected area states from a scenario immediately."""
+        expected_states = self._scenario_area_states(device_id, scenario_id)
+        if not expected_states:
+            _LOGGER.debug(
+                "No scenario AreaSet available for device %s scenario %s",
+                device_id,
+                scenario_id,
+            )
+            return
+
+        self._expected_area_states[device_id] = expected_states
+        self._expected_area_state_until[device_id] = dt_util.now() + timedelta(
+            seconds=SCENARIO_STATE_GUARD_SECONDS
+        )
+
+        if not self.data or "devices" not in self.data:
+            return
+
+        if self._apply_expected_area_states(self.data, clear_matched=False):
+            _LOGGER.debug(
+                "Applied expected scenario %s area states for device %s: %s",
+                scenario_id,
+                device_id,
+                expected_states,
+            )
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
+    def _scenario_area_states(
+        self, device_id: int, scenario_id: int
+    ) -> dict[int, int]:
+        """Return area Armed values declared by a scenario AreaSet."""
+        device = self.get_device(device_id)
+        scenario = self.get_scenario(device_id, scenario_id)
+        if not device or not scenario:
+            return {}
+
+        area_set = scenario.get("AreaSet")
+        if not isinstance(area_set, str):
+            return {}
+
+        expected_states: dict[int, int] = {}
+        for area in device.get("areas", []):
+            area_id = area.get("AreaId")
+            if area_id is None or area_id >= len(area_set):
+                continue
+            try:
+                armed = int(area_set[area_id])
+            except (TypeError, ValueError):
+                continue
+            if armed:
+                expected_states[area_id] = armed
+        return expected_states
+
+    def _apply_expected_area_states(
+        self,
+        data: dict[str, Any],
+        *,
+        clear_matched: bool = True,
+    ) -> bool:
+        """Keep fresh data aligned with a just-commanded scenario while cloud catches up."""
+        changed = False
+        now = dt_util.now()
+
+        for device in data.get("devices", []):
+            device_id = device.get("device_id")
+            if device_id is None:
+                continue
+
+            expected_states = self._expected_area_states.get(device_id)
+            guard_until = self._expected_area_state_until.get(device_id)
+            if not expected_states or guard_until is None:
+                continue
+
+            if now >= guard_until:
+                self._clear_expected_area_states(device_id)
+                continue
+
+            areas_by_id = {
+                area.get("AreaId"): area for area in device.get("areas", [])
+            }
+            has_unmatched_state = False
+            for area_id, expected_armed in expected_states.items():
+                area = areas_by_id.get(area_id)
+                if area is None:
+                    has_unmatched_state = True
+                    continue
+
+                if area.get("Armed") != expected_armed:
+                    has_unmatched_state = True
+                    area["Armed"] = expected_armed
+                    changed = True
+
+            if has_unmatched_state:
+                _LOGGER.debug(
+                    "Keeping expected scenario area states for device %s: %s",
+                    device_id,
+                    expected_states,
+                )
+            elif clear_matched:
+                self._clear_expected_area_states(device_id)
+
+        return changed
+
+    def _expected_area_state(self, device_id: int, area_id: int) -> int | None:
+        """Return a guarded expected Armed value for an area, if active."""
+        guard_until = self._expected_area_state_until.get(device_id)
+        if guard_until is None:
+            return None
+
+        if dt_util.now() >= guard_until:
+            self._clear_expected_area_states(device_id)
+            return None
+
+        return self._expected_area_states.get(device_id, {}).get(area_id)
+
+    def _area_update_matches_expected(
+        self,
+        device_id: int | None,
+        area_id: int | None,
+        status_update: dict[str, Any],
+    ) -> bool:
+        """Return False when a realtime area update contradicts a fresh scenario command."""
+        if device_id is None or area_id is None or "Armed" not in status_update:
+            return True
+
+        expected_armed = self._expected_area_state(device_id, area_id)
+        if expected_armed is None:
+            return True
+
+        try:
+            incoming_armed = int(status_update["Armed"])
+        except (TypeError, ValueError):
+            return True
+
+        if incoming_armed == expected_armed:
+            return True
+
+        _LOGGER.debug(
+            "Ignoring stale area update during scenario transition for device %s "
+            "area %s: incoming Armed=%s, expected Armed=%s",
+            device_id,
+            area_id,
+            incoming_armed,
+            expected_armed,
+        )
+        return False
+
+    def _clear_expected_area_states(self, device_id: int) -> None:
+        """Clear expected states for a device."""
+        self._expected_area_states.pop(device_id, None)
+        self._expected_area_state_until.pop(device_id, None)
 
     def _check_alarm_triggered(self, data: dict[str, Any]) -> None:
         """Check for alarm state changes and fire events."""
@@ -377,6 +537,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_id = area_update.get("AreaId")
             if not device_id or area_id is None:
                 continue
+            if not self._area_update_matches_expected(device_id, area_id, area_update):
+                continue
             device = find_device(device_id)
             if device:
                 for idx, area in enumerate(device.get("areas", [])):
@@ -430,8 +592,13 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         has_changes = False
         for device in self.data.get("devices", []):
+            device_id = device.get("device_id")
             for idx, area in enumerate(device.get("areas", [])):
                 if area.get("AreaId") == area_id:
+                    if not self._area_update_matches_expected(
+                        device_id, area_id, status_update
+                    ):
+                        continue
                     device["areas"][idx].update(status_update)
                     has_changes = True
                     _LOGGER.debug(
