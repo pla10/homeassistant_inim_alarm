@@ -156,6 +156,22 @@ class InimAlarmControlPanel(
             _LOGGER.warning("Invalid scenario configured for %s: %r", conf_key, value)
             return None
 
+    def _active_scenario_mode(self) -> str | None:
+        """Return home/away when the active scenario matches configured actions."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return None
+
+        active_scenario = device.get("active_scenario")
+        if active_scenario is None:
+            return None
+
+        if active_scenario == self._configured_scenario(CONF_ARM_AWAY_SCENARIO):
+            return "away"
+        if active_scenario == self._configured_scenario(CONF_ARM_HOME_SCENARIO):
+            return "home"
+        return None
+
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
@@ -208,8 +224,8 @@ class InimAlarmControlPanel(
                 any_armed = True
         
         if any_armed:
-            # Return armed state based on the mode set when arming
-            if self._armed_mode == "away":
+            mode = self._active_scenario_mode() or self._armed_mode
+            if mode == "away":
                 return AlarmControlPanelState.ARMED_AWAY
             return AlarmControlPanelState.ARMED_HOME
         
@@ -273,6 +289,7 @@ class InimAlarmControlPanel(
                 "%s device %s via scenario %s", action, self._device_id, scenario_id
             )
             await self._api.activate_scenario(self._device_id, scenario_id)
+            self.coordinator.apply_expected_scenario(self._device_id, scenario_id)
             return True
 
         # Fallback: arm/disarm every configured area the same way
@@ -390,6 +407,33 @@ class InimAreaAlarmControlPanel(
         if str(area_id) in away_only_areas:
             self._attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
 
+    def _configured_scenario(self, conf_key: str) -> int | None:
+        """Return the scenario ID mapped to an action, or None if unset."""
+        value = self._options.get(conf_key)
+        if value in (None, ""):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            _LOGGER.warning("Invalid scenario configured for %s: %r", conf_key, value)
+            return None
+
+    def _active_scenario_mode(self) -> str | None:
+        """Return home/away when the active scenario matches configured actions."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return None
+
+        active_scenario = device.get("active_scenario")
+        if active_scenario is None:
+            return None
+
+        if active_scenario == self._configured_scenario(CONF_ARM_AWAY_SCENARIO):
+            return "away"
+        if active_scenario == self._configured_scenario(CONF_ARM_HOME_SCENARIO):
+            return "home"
+        return None
+
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
@@ -432,8 +476,8 @@ class InimAreaAlarmControlPanel(
             self._armed_mode = "home"
             return AlarmControlPanelState.DISARMED
         
-        # Return armed state based on the mode set when arming
-        if self._armed_mode == "away":
+        mode = self._active_scenario_mode() or self._armed_mode
+        if mode == "away":
             return AlarmControlPanelState.ARMED_AWAY
         return AlarmControlPanelState.ARMED_HOME
 
