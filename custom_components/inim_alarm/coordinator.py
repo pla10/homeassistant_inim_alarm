@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -26,6 +27,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 SCENARIO_STATE_GUARD_SECONDS = 12
+AREA_STATE_DEBOUNCE_SECONDS = 1.5
 
 
 class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -59,6 +61,9 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._expected_area_states: dict[int, dict[int, int]] = {}
         self._expected_area_state_until: dict[int, datetime] = {}
         self._active_scenarios: dict[int, int | None] = {}
+        # Batch area Armed updates so scenario changes are published once, not area by area
+        self._pending_area_state_updates: dict[tuple[int, int], dict[str, Any]] = {}
+        self._area_publish_handle: asyncio.TimerHandle | None = None
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
@@ -93,7 +98,6 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             # Wait for central to send data to cloud (5 seconds required)
             if poll_requested:
-                import asyncio
                 await asyncio.sleep(5)
             
             # Now get devices with all data (should have fresh state)
@@ -395,6 +399,72 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._expected_area_states.pop(device_id, None)
         self._expected_area_state_until.pop(device_id, None)
 
+    def _queue_area_state_update(
+        self,
+        device_id: int | None,
+        area_id: int | None,
+        status_update: dict[str, Any],
+    ) -> bool:
+        """Queue an area Armed update for debounced publishing."""
+        if device_id is None or area_id is None:
+            return False
+        if not self._area_update_matches_expected(device_id, area_id, status_update):
+            return False
+
+        key = (device_id, area_id)
+        self._pending_area_state_updates.setdefault(key, {}).update(status_update)
+        self._schedule_area_state_publish()
+        return True
+
+    def _schedule_area_state_publish(self) -> None:
+        """Schedule a debounced publish of queued area Armed updates."""
+        if self._area_publish_handle is not None:
+            self._area_publish_handle.cancel()
+
+        self._area_publish_handle = self.hass.loop.call_later(
+            AREA_STATE_DEBOUNCE_SECONDS,
+            self._publish_debounced_area_state_updates,
+        )
+
+    @callback
+    def _publish_debounced_area_state_updates(self) -> None:
+        """Apply queued area Armed updates and notify listeners once."""
+        self._area_publish_handle = None
+        if not self.data or "devices" not in self.data:
+            self._pending_area_state_updates.clear()
+            return
+
+        pending_updates = self._pending_area_state_updates
+        self._pending_area_state_updates = {}
+        if not pending_updates:
+            return
+
+        has_changes = False
+        for device in self.data.get("devices", []):
+            device_id = device.get("device_id")
+            if device_id is None:
+                continue
+
+            for idx, area in enumerate(device.get("areas", [])):
+                area_id = area.get("AreaId")
+                status_update = pending_updates.get((device_id, area_id))
+                if not status_update:
+                    continue
+
+                device["areas"][idx].update(status_update)
+                has_changes = True
+                _LOGGER.debug(
+                    "Debounced area update %s: %s",
+                    area.get("Name", area_id),
+                    status_update,
+                )
+
+        if has_changes:
+            self._apply_expected_area_states(self.data)
+            _LOGGER.debug("Publishing debounced area state updates")
+            self._check_alarm_triggered(self.data)
+            self.async_set_updated_data(self.data)
+
     def _check_alarm_triggered(self, data: dict[str, Any]) -> None:
         """Check for alarm state changes and fire events."""
         for device in data.get("devices", []):
@@ -539,6 +609,9 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_stop_websocket(self) -> None:
         """Stop the WebSocket client."""
+        if self._area_publish_handle is not None:
+            self._area_publish_handle.cancel()
+            self._area_publish_handle = None
         await self._ws_client.stop()
 
     def _on_websocket_update(self, event_data: dict[str, Any]) -> None:
@@ -582,14 +655,23 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             area_id = area_update.get("AreaId")
             if not device_id or area_id is None:
                 continue
-            if not self._area_update_matches_expected(device_id, area_id, area_update):
-                continue
             device = find_device(device_id)
             if device:
                 for idx, area in enumerate(device.get("areas", [])):
                     if area.get("AreaId") == area_id:
-                        device["areas"][idx].update(area_update)
-                        has_changes = True
+                        if "Armed" in area_update:
+                            self._queue_area_state_update(
+                                device_id, area_id, {"Armed": area_update["Armed"]}
+                            )
+
+                        immediate_update = {
+                            key: value
+                            for key, value in area_update.items()
+                            if key != "Armed"
+                        }
+                        if immediate_update:
+                            device["areas"][idx].update(immediate_update)
+                            has_changes = True
                         break
 
         if has_changes:
@@ -635,27 +717,17 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not self.data or "devices" not in self.data:
             return
 
-        has_changes = False
         for device in self.data.get("devices", []):
             device_id = device.get("device_id")
-            for idx, area in enumerate(device.get("areas", [])):
+            for area in device.get("areas", []):
                 if area.get("AreaId") == area_id:
-                    if not self._area_update_matches_expected(
-                        device_id, area_id, status_update
-                    ):
-                        continue
-                    device["areas"][idx].update(status_update)
-                    has_changes = True
-                    _LOGGER.debug(
-                        "SIA update area %s: %s", area.get("Name", area_id), status_update
-                    )
-                    break
-            if has_changes:
-                break
-
-        if has_changes:
-            self._check_alarm_triggered(self.data)
-            self.async_set_updated_data(self.data)
+                    if self._queue_area_state_update(device_id, area_id, status_update):
+                        _LOGGER.debug(
+                            "Queued SIA area update %s: %s",
+                            area.get("Name", area_id),
+                            status_update,
+                        )
+                    return
 
     @property
     def devices(self) -> list[dict[str, Any]]:
