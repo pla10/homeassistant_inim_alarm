@@ -55,9 +55,10 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._previous_armed_states: dict[tuple[int, int], int] = {}
         # Track pending commands from Home Assistant
         self._pending_ha_commands: dict[tuple[int, int | None], datetime] = {}
-        # Track scenario states expected after a Home Assistant scenario command
+        # Track scenario states expected after a recent scenario change
         self._expected_area_states: dict[int, dict[int, int]] = {}
         self._expected_area_state_until: dict[int, datetime] = {}
+        self._active_scenarios: dict[int, int | None] = {}
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
@@ -130,6 +131,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data["devices"].append(device_data)
             
             _LOGGER.debug("Updated data for %d devices", len(data["devices"]))
+            self._apply_active_scenario_changes(data)
             self._apply_expected_area_states(data)
             
             # Check for alarm state changes and fire events
@@ -198,7 +200,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def apply_expected_scenario(self, device_id: int, scenario_id: int) -> None:
         """Apply expected area states from a scenario immediately."""
-        expected_states = self._scenario_area_states(device_id, scenario_id)
+        device = self.get_device(device_id)
+        expected_states = self._scenario_area_states_from_device(device, scenario_id)
         if not expected_states:
             _LOGGER.debug(
                 "No scenario AreaSet available for device %s scenario %s",
@@ -207,10 +210,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             return
 
-        self._expected_area_states[device_id] = expected_states
-        self._expected_area_state_until[device_id] = dt_util.now() + timedelta(
-            seconds=SCENARIO_STATE_GUARD_SECONDS
-        )
+        self._set_expected_area_states(device_id, scenario_id, expected_states)
 
         if not self.data or "devices" not in self.data:
             return
@@ -225,13 +225,43 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._check_alarm_triggered(self.data)
             self.async_set_updated_data(self.data)
 
-    def _scenario_area_states(
-        self, device_id: int, scenario_id: int
+    def _apply_active_scenario_changes(self, data: dict[str, Any]) -> None:
+        """Use ActiveScenario changes from the cloud as scenario intent."""
+        for device in data.get("devices", []):
+            device_id = device.get("device_id")
+            active_scenario = device.get("active_scenario")
+            if device_id is None:
+                continue
+
+            previous_scenario = self._active_scenarios.get(device_id)
+            if previous_scenario == active_scenario:
+                continue
+
+            self._active_scenarios[device_id] = active_scenario
+            if active_scenario is None:
+                continue
+
+            expected_states = self._scenario_area_states_from_device(
+                device, active_scenario
+            )
+            if expected_states:
+                self._set_expected_area_states(
+                    device_id, active_scenario, expected_states
+                )
+
+    def _scenario_area_states_from_device(
+        self, device: dict[str, Any] | None, scenario_id: int
     ) -> dict[int, int]:
         """Return area Armed values declared by a scenario AreaSet."""
-        device = self.get_device(device_id)
-        scenario = self.get_scenario(device_id, scenario_id)
-        if not device or not scenario:
+        if not device:
+            return {}
+
+        scenario = None
+        for candidate in device.get("scenarios", []):
+            if candidate.get("ScenarioId") == scenario_id:
+                scenario = candidate
+                break
+        if not scenario:
             return {}
 
         area_set = scenario.get("AreaSet")
@@ -251,13 +281,28 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 expected_states[area_id] = armed
         return expected_states
 
+    def _set_expected_area_states(
+        self, device_id: int, scenario_id: int, expected_states: dict[int, int]
+    ) -> None:
+        """Store expected states for a recent scenario change."""
+        self._expected_area_states[device_id] = expected_states
+        self._expected_area_state_until[device_id] = dt_util.now() + timedelta(
+            seconds=SCENARIO_STATE_GUARD_SECONDS
+        )
+        _LOGGER.debug(
+            "Expecting scenario %s area states for device %s: %s",
+            scenario_id,
+            device_id,
+            expected_states,
+        )
+
     def _apply_expected_area_states(
         self,
         data: dict[str, Any],
         *,
         clear_matched: bool = True,
     ) -> bool:
-        """Keep fresh data aligned with a just-commanded scenario while cloud catches up."""
+        """Keep fresh data aligned with a just-changed scenario while cloud catches up."""
         changed = False
         now = dt_util.now()
 
