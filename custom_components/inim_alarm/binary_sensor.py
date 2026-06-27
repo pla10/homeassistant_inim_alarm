@@ -101,6 +101,15 @@ async def async_setup_entry(
                     zone_name=zone_name,
                 )
             )
+            entities.append(
+                InimZoneAlarmMemoryBinarySensor(
+                    coordinator=coordinator,
+                    device_id=device_id,
+                    device_name=device_name,
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                )
+            )
 
     async_add_entities(entities)
 
@@ -181,6 +190,83 @@ class InimZoneBinarySensor(
             "terminal_id": zone.get("TerminalId"),
             "voltage": zone.get("Voltage", 0) if zone.get("Voltage", 0) > 0 else None,
             "power": zone.get("Power", 0) if zone.get("Power", 0) > 0 else None,
+        }
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class InimZoneAlarmMemoryBinarySensor(
+    CoordinatorEntity[InimDataUpdateCoordinator], BinarySensorEntity
+):
+    """Representation of an INIM zone alarm memory binary sensor."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.SAFETY
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        device_id: int,
+        device_name: str,
+        zone_id: int,
+        zone_name: str,
+    ) -> None:
+        """Initialize the alarm memory binary sensor."""
+        super().__init__(coordinator)
+        self._device_id = device_id
+        self._device_name = device_name
+        self._zone_id = zone_id
+        self._zone_name = zone_name
+        self._attr_unique_id = f"{device_id}_zone_{zone_id}_alarm_memory"
+        self._attr_name = f"Allarme {zone_name}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the zone has alarm memory."""
+        zone = self.coordinator.get_zone(self._device_id, self._zone_id)
+        if not zone:
+            return None
+
+        return zone.get("AlarmMemory", 0) > 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        zone = self.coordinator.get_zone(self._device_id, self._zone_id)
+        if not zone:
+            return {}
+
+        return {
+            ATTR_DEVICE_ID: self._device_id,
+            ATTR_ZONE_ID: self._zone_id,
+            ATTR_ALARM_MEMORY: zone.get("AlarmMemory", 0) > 0,
+            ATTR_TAMPER_MEMORY: zone.get("TamperMemory", 0) > 0,
+            ATTR_BYPASSED: zone.get("Bypassed", 0) > 0,
+            "source_zone_name": self._zone_name,
+            "areas": zone.get("Areas"),
+            "type": zone.get("Type"),
         }
 
     @callback
