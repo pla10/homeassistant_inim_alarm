@@ -36,6 +36,7 @@ from .const import (
     CONF_ARM_HOME_SCENARIO,
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
     CONF_ZONE_ALARM_MEMORY_EXPOSURE,
@@ -53,6 +54,15 @@ _LOGGER = logging.getLogger(__name__)
 def _is_zone_output(zone: dict[str, Any]) -> bool:
     """Return true when the item represents an output instead of an alarm zone."""
     return zone.get("Type") == 4
+
+
+def _is_alarm_memory_zone_excluded(zone_id: int | None, options: dict[str, Any]) -> bool:
+    """Return true when a zone was manually excluded from alarm memory exposure."""
+    if zone_id is None:
+        return True
+    return str(zone_id) in {
+        str(value) for value in options.get(CONF_EXCLUDED_ALARM_MEMORY_ZONES, [])
+    }
 
 
 def _expose_alarm_memory_alarm_panels(options: dict[str, Any]) -> bool:
@@ -135,6 +145,8 @@ async def async_setup_entry(
                 if zone.get("Visibility", 1) == 0:
                     continue
                 if _is_zone_output(zone):
+                    continue
+                if _is_alarm_memory_zone_excluded(zone_id, options):
                     continue
 
                 entities.append(
