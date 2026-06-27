@@ -25,6 +25,7 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
@@ -102,6 +103,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     CONF_ZONE_ALARM_MEMORY_EXPOSURE,
                     DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
                 ),
+            ),
+            CONF_EXCLUDED_ALARM_MEMORY_ZONES: entry.options.get(
+                CONF_EXCLUDED_ALARM_MEMORY_ZONES,
+                entry.data.get(CONF_EXCLUDED_ALARM_MEMORY_ZONES, []),
             ),
         },
     }
