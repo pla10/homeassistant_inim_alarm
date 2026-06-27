@@ -26,8 +26,14 @@ from .const import (
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_USER_CODE,
+    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
     DEFAULT_SIA_PORT,
+    DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
     DOMAIN,
+    ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+    ZONE_ALARM_MEMORY_EXPOSURE_BINARY_SENSOR,
+    ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
+    ZONE_ALARM_MEMORY_EXPOSURE_DISABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -197,6 +203,13 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
             CONF_SIA_ACCOUNT,
             self.config_entry.data.get(CONF_SIA_ACCOUNT, ""),
         )
+        current_zone_alarm_memory_exposure = self.config_entry.options.get(
+            CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+            self.config_entry.data.get(
+                CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
+            ),
+        )
 
         # Build the scenario list from the coordinator so users pick by name.
         scenario_options = self._build_scenario_options()
@@ -241,6 +254,30 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 )
             )
 
+        zone_alarm_memory_exposure_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_DISABLED,
+                        label="Disabled",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_BINARY_SENSOR,
+                        label="Safety binary sensors",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+                        label="Read-only alarm panels",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
+                        label="Both",
+                    ),
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+
         options_schema = vol.Schema(
             {
                 vol.Required(
@@ -259,6 +296,10 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_SIA_ACCOUNT,
                     default=current_sia_account,
                 ): str,
+                vol.Optional(
+                    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                    default=current_zone_alarm_memory_exposure,
+                ): zone_alarm_memory_exposure_selector,
                 **scenario_schema,
                 **area_schema,
             }
