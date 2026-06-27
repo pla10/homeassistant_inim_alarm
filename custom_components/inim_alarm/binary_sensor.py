@@ -21,6 +21,7 @@ from .const import (
     ATTR_DEVICE_ID,
     ATTR_TAMPER_MEMORY,
     ATTR_ZONE_ID,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_ZONE_ALARM_MEMORY_EXPOSURE,
     DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
     DOMAIN,
@@ -74,6 +75,15 @@ def _is_zone_output(zone: dict[str, Any]) -> bool:
     return zone.get("Type") == 4
 
 
+def _is_alarm_memory_zone_excluded(zone_id: int | None, options: dict[str, Any]) -> bool:
+    """Return true when a zone was manually excluded from alarm memory exposure."""
+    if zone_id is None:
+        return True
+    return str(zone_id) in {
+        str(value) for value in options.get(CONF_EXCLUDED_ALARM_MEMORY_ZONES, [])
+    }
+
+
 def _expose_alarm_memory_binary_sensors(options: dict[str, Any]) -> bool:
     """Return true when alarm memories should be exposed as binary sensors."""
     exposure = options.get(
@@ -124,7 +134,11 @@ async def async_setup_entry(
                     zone_name=zone_name,
                 )
             )
-            if expose_alarm_memory and not _is_zone_output(zone):
+            if (
+                expose_alarm_memory
+                and not _is_zone_output(zone)
+                and not _is_alarm_memory_zone_excluded(zone_id, options)
+            ):
                 entities.append(
                     InimZoneAlarmMemoryBinarySensor(
                         coordinator=coordinator,
