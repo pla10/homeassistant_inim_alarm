@@ -65,6 +65,11 @@ def _guess_device_class(zone_name: str) -> BinarySensorDeviceClass:
     return BinarySensorDeviceClass.OPENING
 
 
+def _is_zone_output(zone: dict[str, Any]) -> bool:
+    """Return true when the item represents an output instead of an alarm zone."""
+    return zone.get("Type") == 4
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -101,15 +106,16 @@ async def async_setup_entry(
                     zone_name=zone_name,
                 )
             )
-            entities.append(
-                InimZoneAlarmMemoryBinarySensor(
-                    coordinator=coordinator,
-                    device_id=device_id,
-                    device_name=device_name,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
+            if not _is_zone_output(zone):
+                entities.append(
+                    InimZoneAlarmMemoryBinarySensor(
+                        coordinator=coordinator,
+                        device_id=device_id,
+                        device_name=device_name,
+                        zone_id=zone_id,
+                        zone_name=zone_name,
+                    )
                 )
-            )
 
     async_add_entities(entities)
 
