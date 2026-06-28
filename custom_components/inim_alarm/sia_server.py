@@ -178,7 +178,13 @@ def _process_sia_event(coordinator: Any, parsed: dict) -> None:
         armed_value = 4 if event_class in AREA_DISARM_CODES else 1
         coordinator.async_on_sia_area_update(id_int, {"Armed": armed_value})
     elif event_class in ZONE_ALARM_CODES:
-        coordinator.async_on_sia_update(id_int, {"Status": 2, "AlarmMemory": True})
+        coordinator.async_on_sia_update(
+            id_int,
+            {
+                "Status": 2,
+                "_alarm_memory_if_scenario_arms_zone": True,
+            },
+        )
     elif event_class in ZONE_RESTORE_CODES:
         coordinator.async_on_sia_update(id_int, {"Status": 1})
     else:
