@@ -25,11 +25,14 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_USER_CODE,
+    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
     DEFAULT_SIA_PORT,
+    DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
     DOMAIN,
     PLATFORMS,
     SERVICE_ACTIVATE_SCENARIO,
@@ -94,6 +97,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO),
             CONF_DISARM_SCENARIO: entry.options.get(CONF_DISARM_SCENARIO),
             CONF_AWAY_ONLY_AREAS: entry.options.get(CONF_AWAY_ONLY_AREAS, []),
+            CONF_ZONE_ALARM_MEMORY_EXPOSURE: entry.options.get(
+                CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                entry.data.get(
+                    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                    DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
+                ),
+            ),
+            CONF_EXCLUDED_ALARM_MEMORY_ZONES: entry.options.get(
+                CONF_EXCLUDED_ALARM_MEMORY_ZONES,
+                entry.data.get(CONF_EXCLUDED_ALARM_MEMORY_ZONES, []),
+            ),
         },
     }
 

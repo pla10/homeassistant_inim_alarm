@@ -22,12 +22,19 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_USER_CODE,
+    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
     DEFAULT_SIA_PORT,
+    DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
     DOMAIN,
+    ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+    ZONE_ALARM_MEMORY_EXPOSURE_BINARY_SENSOR,
+    ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
+    ZONE_ALARM_MEMORY_EXPOSURE_DISABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -197,10 +204,18 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
             CONF_SIA_ACCOUNT,
             self.config_entry.data.get(CONF_SIA_ACCOUNT, ""),
         )
+        current_zone_alarm_memory_exposure = self.config_entry.options.get(
+            CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+            self.config_entry.data.get(
+                CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
+            ),
+        )
 
-        # Build the scenario list from the coordinator so users pick by name.
+        # Build lists from the coordinator so users pick by name.
         scenario_options = self._build_scenario_options()
         area_options = self._build_area_options()
+        zone_options = self._build_zone_options()
 
         scenario_schema: dict[Any, Any] = {}
         if scenario_options:
@@ -241,6 +256,49 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 )
             )
 
+        zone_schema: dict[Any, Any] = {}
+        if zone_options:
+            current_excluded_zones = self.config_entry.options.get(
+                CONF_EXCLUDED_ALARM_MEMORY_ZONES,
+                [],
+            )
+            zone_schema[
+                vol.Optional(
+                    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
+                    default=current_excluded_zones,
+                )
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=zone_options,
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+
+        zone_alarm_memory_exposure_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_DISABLED,
+                        label="Disabled",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_BINARY_SENSOR,
+                        label="Safety binary sensors",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+                        label="Read-only alarm panels",
+                    ),
+                    selector.SelectOptionDict(
+                        value=ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
+                        label="Both",
+                    ),
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+
         options_schema = vol.Schema(
             {
                 vol.Required(
@@ -259,6 +317,11 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_SIA_ACCOUNT,
                     default=current_sia_account,
                 ): str,
+                vol.Optional(
+                    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+                    default=current_zone_alarm_memory_exposure,
+                ): zone_alarm_memory_exposure_selector,
+                **zone_schema,
                 **scenario_schema,
                 **area_schema,
             }
@@ -313,6 +376,33 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                         selector.SelectOptionDict(
                             value=value,
                             label=area.get("Name", f"Area {area_id}"),
+                        )
+                    )
+        except (KeyError, AttributeError, TypeError):
+            pass
+        return options
+
+    def _build_zone_options(self) -> list[selector.SelectOptionDict]:
+        """Return zones as selector options (value=id, label=name)."""
+        options: list[selector.SelectOptionDict] = []
+        seen: set[str] = set()
+        try:
+            coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]["coordinator"]
+            for device in coordinator.data.get("devices", []):
+                for zone in device.get("zones", []):
+                    if zone.get("Visibility", 1) == 0:
+                        continue
+                    zone_id = zone.get("ZoneId")
+                    if zone_id is None:
+                        continue
+                    value = str(zone_id)
+                    if value in seen:
+                        continue
+                    seen.add(value)
+                    options.append(
+                        selector.SelectOptionDict(
+                            value=value,
+                            label=zone.get("Name", f"Zone {zone_id}"),
                         )
                     )
         except (KeyError, AttributeError, TypeError):
