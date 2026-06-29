@@ -8,50 +8,6 @@
 
 A Home Assistant custom integration for INIM alarm systems (SmartLiving, Prime, etc.) via INIM Cloud, with optional local real-time updates.
 
-## Fork status
-
-This repository is a personal fork of [`pla10/homeassistant_inim_alarm`](https://github.com/pla10/homeassistant_inim_alarm).
-
-It is based on upstream `pla10/main` commit:
-
-```text
-b031020de236017417002f63242766b30560cf73
-```
-
-The goal of this fork is to test and submit improvements upstream while keeping a working version for local INIM Prime / Home Assistant / HomeKit use.
-
-### Changes developed in this fork / submitted upstream
-
-- [PR #15](https://github.com/pla10/homeassistant_inim_alarm/pull/15) — **Support INIM double-zone SIA-IP mapping**
-  - Adds support for INIM double-zone / secondary-channel SIA-IP mappings.
-  - Keeps the existing exact `ZoneId` match first, then tries fallback candidates for double-zone events.
-  - Tested with standard and double-zone SIA-IP events such as `BA1`, `BR1`, `BA20`, `BR20`, `BA2002`, `BR2002`, etc.
-
-- [PR #17](https://github.com/pla10/homeassistant_inim_alarm/pull/17) — **Stabilize alarm area states after scenario changes**
-  - Improves area state handling after scenario changes from Home Assistant/HomeKit, INIM app, SIA-IP, or WebSocket.
-  - Applies expected area states from scenario `AreaSet` after HA scenario commands.
-  - Detects external `ActiveScenario` changes from cloud polling.
-  - Ignores stale realtime area updates that contradict a recent scenario state.
-  - Debounces SIA/WebSocket area `Armed` updates so Home Assistant receives one stable state instead of partial area-by-area transitions.
-  - Infers `armed_home` / `armed_away` from the active configured scenario.
-
-- [PR #18](https://github.com/pla10/homeassistant_inim_alarm/pull/18) — **Add per-zone alarm memory binary sensors**
-  - Adds a second binary sensor for each visible alarm zone to expose the zone `AlarmMemory` flag as a real entity.
-  - Keeps the normal zone open/closed binary sensors unchanged.
-  - Creates entities named `Allarme <zone name>` for per-zone alarm memory.
-  - Useful for dashboards, automations, and HomeKit Bridge setups that need to know exactly which zone caused an alarm.
-  - Skips output/relay-style zones where possible.
-
-- [PR #19](https://github.com/pla10/homeassistant_inim_alarm/pull/19) — **Add configurable zone alarm memory exposure modes**
-  - Adds `zone_alarm_memory_exposure` integration option.
-  - Available modes: `Disabled`, `Safety binary sensors`, `Read-only alarm panels`, `Both`.
-  - Adds optional read-only per-zone `alarm_control_panel` entities backed by `AlarmMemory`.
-  - Read-only alarm panels expose `AlarmMemory == false` as `disarmed` and `AlarmMemory == true` as `triggered`.
-  - Intended especially for HomeKit, where alarm panel entities produce security-style important notifications with the zone name.
-  - Adds `excluded_alarm_memory_zones` so users can manually exclude relays, outputs, lights, heating, door-release outputs, or any other zones they do not want exposed as alarm memory entities.
-
-> Note: some changes may live on feature branches until they are merged upstream or into this fork's `main` branch.
-
 ## ✨ Features
 
 - 🔐 **Alarm Control Panel** - Arm/disarm all areas at once
