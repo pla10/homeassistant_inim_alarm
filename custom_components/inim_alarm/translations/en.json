@@ -34,9 +34,20 @@
     }
   },
   "options": {
+    "error": {
+      "mapping_required": "Select at least one scenario or enable Remove mapping."
+    },
     "step": {
       "init": {
         "title": "INIM Alarm Options",
+        "description": "Choose which settings to configure.",
+        "menu_options": {
+          "general": "General settings",
+          "area_scenarios": "Per-area scenario mappings"
+        }
+      },
+      "general": {
+        "title": "General settings",
         "description": "Configure polling, SIA-IP, scenario mapping and area arming modes.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
@@ -57,6 +68,29 @@
           "arm_home_scenario": "Panel scenario to activate for Armed Home (e.g. Night/partial). Leave empty to arm all areas.",
           "disarm_scenario": "Panel scenario to activate for Disarm. Leave empty to disarm all areas.",
           "away_only_areas": "Areas that should offer Armed Away but not Armed Home."
+        }
+      },
+      "area_scenarios": {
+        "title": "Per-area scenario mappings",
+        "description": "Choose an area to map. You can reopen this screen to configure another area.",
+        "data": {
+          "area": "Area"
+        }
+      },
+      "area_scenario": {
+        "title": "Scenarios for {area_name}",
+        "description": "Map each action to an explicit panel scenario. Leave actions blank to keep the InsertAreas fallback.",
+        "data": {
+          "arm_away_scenario": "Armed Away scenario",
+          "arm_home_scenario": "Armed Home scenario",
+          "disarm_scenario": "Disarm scenario",
+          "remove_area_scenario_mapping": "Remove mapping"
+        },
+        "data_description": {
+          "arm_away_scenario": "Scenario to activate when this area is armed Away.",
+          "arm_home_scenario": "Scenario to activate when this area is armed Home. Leave blank for Away-only areas.",
+          "disarm_scenario": "Scenario to activate when this area is disarmed.",
+          "remove_area_scenario_mapping": "Delete all explicit scenario mappings for this area."
         }
       }
     }

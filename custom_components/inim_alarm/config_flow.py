@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from typing import Any
 
 import voluptuous as vol
@@ -17,6 +18,8 @@ from .api import InimApi, InimApiError, InimAuthError
 from homeassistant.helpers import config_validation as cv, selector
 
 from .const import (
+    CONF_AREA,
+    CONF_AREA_SCENARIOS,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_AWAY_ONLY_AREAS,
@@ -25,6 +28,7 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
+    CONF_REMOVE_AREA_SCENARIO_MAPPING,
     CONF_USER_CODE,
     DEFAULT_SIA_PORT,
     DOMAIN,
@@ -175,12 +179,38 @@ class InvalidAuth(Exception):
 class InimAlarmOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for INIM Alarm."""
 
+    _selected_area_ref: str | None = None
+    _selected_area_name: str | None = None
+    _selected_device_id: int | None = None
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["general", "area_scenarios"],
+        )
+
+    async def async_step_general(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage general integration options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            options = dict(self.config_entry.options)
+            for key in (
+                CONF_SCAN_INTERVAL,
+                CONF_ENABLE_SIA,
+                CONF_SIA_PORT,
+                CONF_SIA_ACCOUNT,
+                CONF_ARM_AWAY_SCENARIO,
+                CONF_ARM_HOME_SCENARIO,
+                CONF_DISARM_SCENARIO,
+                CONF_AWAY_ONLY_AREAS,
+            ):
+                options.pop(key, None)
+            options.update(user_input)
+            return self.async_create_entry(title="", data=options)
 
         # Get current values
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
@@ -265,17 +295,128 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="general",
             data_schema=options_schema,
         )
 
-    def _build_scenario_options(self) -> list[selector.SelectOptionDict]:
+    async def async_step_area_scenarios(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select an area to configure."""
+        area_options = self._build_area_mapping_options()
+
+        if user_input is not None:
+            area_ref = user_input[CONF_AREA]
+            selected = next(
+                (option for option in area_options if option["value"] == area_ref),
+                None,
+            )
+            if selected is not None:
+                device_id, _ = self._parse_area_ref(area_ref)
+                self._selected_area_ref = area_ref
+                self._selected_area_name = selected["label"]
+                self._selected_device_id = device_id
+                return await self.async_step_area_scenario()
+
+        return self.async_show_form(
+            step_id="area_scenarios",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_AREA): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=area_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_area_scenario(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure explicit scenarios for the selected area."""
+        if (
+            self._selected_area_ref is None
+            or self._selected_area_name is None
+            or self._selected_device_id is None
+        ):
+            return await self.async_step_area_scenarios()
+
+        errors: dict[str, str] = {}
+        options = dict(self.config_entry.options)
+        area_scenarios = deepcopy(options.get(CONF_AREA_SCENARIOS, {}))
+        current = area_scenarios.get(self._selected_area_ref, {})
+
+        if user_input is not None:
+            if user_input.pop(CONF_REMOVE_AREA_SCENARIO_MAPPING, False):
+                area_scenarios.pop(self._selected_area_ref, None)
+            else:
+                mapping = {
+                    key: value
+                    for key in (
+                        CONF_ARM_AWAY_SCENARIO,
+                        CONF_ARM_HOME_SCENARIO,
+                        CONF_DISARM_SCENARIO,
+                    )
+                    if (value := user_input.get(key)) not in (None, "")
+                }
+                if not mapping:
+                    errors["base"] = "mapping_required"
+                else:
+                    area_scenarios[self._selected_area_ref] = mapping
+
+            if not errors:
+                options[CONF_AREA_SCENARIOS] = area_scenarios
+                return self.async_create_entry(title="", data=options)
+
+        scenario_options = self._build_scenario_options(self._selected_device_id)
+        scenario_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=scenario_options,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+        scenario_schema: dict[Any, Any] = {}
+        for key in (
+            CONF_ARM_AWAY_SCENARIO,
+            CONF_ARM_HOME_SCENARIO,
+            CONF_DISARM_SCENARIO,
+        ):
+            value = current.get(key)
+            field = (
+                vol.Optional(key, description={"suggested_value": value})
+                if value is not None
+                else vol.Optional(key)
+            )
+            scenario_schema[field] = scenario_selector
+
+        return self.async_show_form(
+            step_id="area_scenario",
+            data_schema=vol.Schema(
+                {
+                    **scenario_schema,
+                    vol.Optional(
+                        CONF_REMOVE_AREA_SCENARIO_MAPPING,
+                        default=False,
+                    ): bool,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"area_name": self._selected_area_name},
+        )
+
+    def _build_scenario_options(
+        self, device_id: int | None = None
+    ) -> list[selector.SelectOptionDict]:
         """Return panel scenarios as selector options (value=id, label=name)."""
         options: list[selector.SelectOptionDict] = []
         seen: set[str] = set()
         try:
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]["coordinator"]
             for device in coordinator.data.get("devices", []):
+                if device_id is not None and device.get("device_id") != device_id:
+                    continue
                 for scenario in device.get("scenarios", []):
                     scenario_id = scenario.get("ScenarioId")
                     if scenario_id is None:
@@ -293,6 +434,44 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         except (KeyError, AttributeError, TypeError):
             pass
         return options
+
+    def _build_area_mapping_options(self) -> list[selector.SelectOptionDict]:
+        """Return areas with device-scoped values for scenario mappings."""
+        options: list[selector.SelectOptionDict] = []
+        try:
+            coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]["coordinator"]
+            devices = coordinator.data.get("devices", [])
+            show_device_name = len(devices) > 1
+            for device in devices:
+                device_id = device.get("device_id")
+                if device_id is None:
+                    continue
+                device_name = device.get("name", f"Device {device_id}")
+                for area in device.get("areas", []):
+                    area_id = area.get("AreaId")
+                    if area_id is None:
+                        continue
+                    area_name = area.get("Name", f"Area {area_id}")
+                    label = (
+                        f"{device_name} - {area_name}"
+                        if show_device_name
+                        else area_name
+                    )
+                    options.append(
+                        selector.SelectOptionDict(
+                            value=f"{device_id}:{area_id}",
+                            label=label,
+                        )
+                    )
+        except (KeyError, AttributeError, TypeError):
+            pass
+        return options
+
+    @staticmethod
+    def _parse_area_ref(area_ref: str) -> tuple[int, int]:
+        """Parse a device-scoped area reference."""
+        device_id, area_id = area_ref.split(":", 1)
+        return int(device_id), int(area_id)
 
     def _build_area_options(self) -> list[selector.SelectOptionDict]:
         """Return alarm areas as selector options (value=id, label=name)."""
