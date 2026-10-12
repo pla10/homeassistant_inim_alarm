@@ -43,6 +43,30 @@ from .coordinator import InimDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def _mode_from_active_scenario(
+    coordinator: InimDataUpdateCoordinator, device_id: int, *mappings: dict
+) -> str | None:
+    """Return "away" or "home" when the panel's active scenario is a mapped one.
+
+    The armed mode must come from the panel: arming from a keypad, the INIM app
+    or an automatic insertion never goes through Home Assistant. Mappings are
+    checked in order, so the first one that maps the active scenario wins.
+    """
+    device = coordinator.get_device(device_id)
+    active = device.get("active_scenario") if device else None
+    if active is None:
+        return None
+    for mapping in mappings:
+        for mode, conf_key in (
+            ("away", CONF_ARM_AWAY_SCENARIO),
+            ("home", CONF_ARM_HOME_SCENARIO),
+        ):
+            value = mapping.get(conf_key)
+            if value not in (None, "") and str(value) == str(active):
+                return mode
+    return None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -209,7 +233,12 @@ class InimAlarmControlPanel(
                 any_armed = True
         
         if any_armed:
-            # Return armed state based on the mode set when arming
+            mode = _mode_from_active_scenario(
+                self.coordinator, self._device_id, self._options
+            )
+            if mode:
+                self._armed_mode = mode
+            # Otherwise fall back to the mode set when arming from HA
             if self._armed_mode == "away":
                 return AlarmControlPanelState.ARMED_AWAY
             return AlarmControlPanelState.ARMED_HOME
@@ -457,7 +486,15 @@ class InimAreaAlarmControlPanel(
             self._armed_mode = "away"
             return AlarmControlPanelState.ARMED_AWAY
 
-        # Return armed state based on the mode set when arming
+        area_mapping = self._options.get(CONF_AREA_SCENARIOS, {}).get(
+            f"{self._device_id}:{self._area_id}", {}
+        )
+        mode = _mode_from_active_scenario(
+            self.coordinator, self._device_id, area_mapping, self._options
+        )
+        if mode:
+            self._armed_mode = mode
+        # Otherwise fall back to the mode set when arming from HA
         if self._armed_mode == "away":
             return AlarmControlPanelState.ARMED_AWAY
         return AlarmControlPanelState.ARMED_HOME

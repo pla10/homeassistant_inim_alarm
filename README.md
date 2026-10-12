@@ -113,6 +113,8 @@ The main alarm control and the individual area controls have separate scenario m
 - **Main alarm scenarios** apply to `alarm_control_panel.<name>` and are useful when one panel scenario should arm or disarm all configured areas.
 - **Per-area scenario mappings** apply to `alarm_control_panel.<area_name>` and are useful when a specific area needs its own explicit Away, Home, or Disarm scenario.
 
+The mappings are also used to show the right armed state. When the panel's active scenario is your Armed Away or Armed Home scenario, the alarm shows that state, even if it was armed from a keypad, the INIM app or an automatic insertion. Area controls check their own mapping first, then the main one. Without mappings, the integration can only remember the mode last armed from Home Assistant and defaults to Armed Home.
+
 ### SIA-IP Setup (Optional)
 
 SIA-IP provides the fastest updates by receiving events directly from the panel over your local network. This requires configuration on the INIM panel by your installer:
