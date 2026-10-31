@@ -22,6 +22,9 @@ from .const import (
     METHOD_INSERT_ZONE,
     METHOD_REGISTER_CLIENT,
     METHOD_REQUEST_POLL,
+    OUTPUT_COMMAND_VALUE,
+    OUTPUT_MODE_OFF,
+    OUTPUT_MODE_ON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -286,6 +289,52 @@ class InimApi:
             await self._request(request_data)
             action = "bypassed" if bypass else "reinstated"
             _LOGGER.info("Zone %s %s on device %s", zone_id, action, device_id)
+            return True
+        except InimAuthError:
+            # Token expired, re-authenticate and retry
+            await self.authenticate()
+            request_data["Token"] = self._token
+            await self._request(request_data)
+            return True
+
+    async def set_output(
+        self, device_id: int, zone_id: int, user_code: str, on: bool = True
+    ) -> bool:
+        """Switch an output on or off.
+
+        Args:
+            device_id: The device ID
+            zone_id: The ZoneId of the output (zone with Type 3 or 4)
+            user_code: The user code for the alarm
+            on: True to activate the output, False to deactivate it
+
+        Returns:
+            True if successful
+        """
+        await self._ensure_authenticated()
+
+        mode = OUTPUT_MODE_ON if on else OUTPUT_MODE_OFF
+
+        request_data = {
+            "Node": "inimhome",
+            "Name": "it.inim.inimutenti",
+            "ClientIP": "",
+            "Method": METHOD_INSERT_ZONE,
+            "Token": self._token,
+            "ClientId": self._client_id,
+            "Params": {
+                "ZoneId": zone_id,
+                "Mode": mode,
+                "DeviceId": str(device_id),
+                "Code": user_code,
+                "Value": OUTPUT_COMMAND_VALUE,
+            },
+        }
+
+        try:
+            await self._request(request_data)
+            action = "activated" if on else "deactivated"
+            _LOGGER.info("Output %s %s on device %s", zone_id, action, device_id)
             return True
         except InimAuthError:
             # Token expired, re-authenticate and retry
