@@ -76,6 +76,15 @@ async def async_setup_entry(
             )
         )
         
+        # Create active scenario sensor for the device
+        entities.append(
+            InimActiveScenarioSensor(
+                coordinator=coordinator,
+                device_id=device_id,
+                device_name=device_name,
+            )
+        )
+
         # Create sensors for each area (only for areas that seem to be in use)
         for area in device.get("areas", []):
             area_id = area.get("AreaId")
@@ -268,6 +277,97 @@ class InimFaultsSensor(
         if faults and faults > 0:
             return "mdi:alert-circle"
         return "mdi:check-circle"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class InimActiveScenarioSensor(
+    CoordinatorEntity[InimDataUpdateCoordinator], SensorEntity
+):
+    """Representation of the scenario currently active on an INIM panel."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Active scenario"
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        device_id: int,
+        device_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._device_id = device_id
+        self._device_name = device_name
+        self._attr_unique_id = f"{device_id}_active_scenario"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the name of the active scenario."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return None
+
+        active_id = device.get("active_scenario")
+        if active_id is None:
+            return None
+
+        scenario = self.coordinator.get_scenario(self._device_id, active_id)
+        if scenario and scenario.get("Name"):
+            return scenario["Name"]
+        return f"Scenario {active_id}"
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on the areas set by the active scenario."""
+        scenario = self.coordinator.get_active_scenario(self._device_id)
+        if not scenario:
+            return "mdi:shield-outline"
+
+        # AreaSet has one digit per area: 4 = disarmed, 0 = area not used
+        area_set = str(scenario.get("AreaSet", ""))
+        used = [digit for digit in area_set if digit != "0"]
+        if used and all(digit == "4" for digit in used):
+            return "mdi:shield-off"
+        return "mdi:shield-lock"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return {}
+
+        return {
+            ATTR_DEVICE_ID: self._device_id,
+            "scenario_id": device.get("active_scenario"),
+            "available_scenarios": {
+                scenario.get("ScenarioId"): scenario.get("Name")
+                for scenario in device.get("scenarios", [])
+            },
+        }
 
     @callback
     def _handle_coordinator_update(self) -> None:
