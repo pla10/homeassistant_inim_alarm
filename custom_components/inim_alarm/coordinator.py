@@ -344,14 +344,20 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Uses Device_Id from the WS payload to match the correct device.
         """
         if not isinstance(event_data, dict):
-            _LOGGER.debug("WS event is not a dict, requesting poll for fresh state")
+            _LOGGER.debug(
+                "WS event is a %s, not a dict: requesting poll for fresh state",
+                type(event_data).__name__,
+            )
             self.hass.async_create_task(self.async_request_refresh())
             return
 
         if not self.data or "devices" not in self.data:
             return
 
+        _LOGGER.debug("WS event received with keys: %s", list(event_data))
+
         has_changes = False
+        has_area_changes = False
 
         def find_device(dev_id: int) -> dict[str, Any] | None:
             for d in self.data.get("devices", []):
@@ -383,12 +389,20 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if area.get("AreaId") == area_id:
                         device["areas"][idx].update(area_update)
                         has_changes = True
+                        has_area_changes = True
                         break
 
         if has_changes:
             _LOGGER.debug("Applying partial updates from WebSocket")
             self._check_alarm_triggered(self.data)
+            # Note: this also restarts the polling timer from now
             self.async_set_updated_data(self.data)
+
+        if has_area_changes:
+            # WS events do not carry the active scenario: read it from the
+            # cloud now instead of waiting a full polling interval
+            _LOGGER.debug("Area change from WebSocket, requesting refresh")
+            self.hass.async_create_task(self.async_request_refresh())
 
     @callback
     def async_on_sia_update(self, zone_id: int, status_update: dict[str, Any]) -> None:
@@ -444,6 +458,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if has_changes:
             self._check_alarm_triggered(self.data)
             self.async_set_updated_data(self.data)
+            # SIA events do not carry the active scenario: read it from the cloud
+            self.hass.async_create_task(self.async_request_refresh())
 
     @property
     def devices(self) -> list[dict[str, Any]]:
