@@ -20,27 +20,68 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api import InimApi
 from .const import (
     AREA_ARMED_DISARMED,
+    ATTR_ALARM_MEMORY,
     ATTR_AREA_ID,
+    ATTR_BYPASSED,
     ATTR_DEVICE_ID,
     ATTR_FIRMWARE,
     ATTR_LAST_CHANGED_AT,
     ATTR_LAST_CHANGED_BY,
     ATTR_MODEL,
     ATTR_SERIAL_NUMBER,
+    ATTR_TAMPER_MEMORY,
     ATTR_VOLTAGE,
+    ATTR_ZONE_ID,
     CONF_AREA_SCENARIOS,
     CONF_ARM_AWAY_SCENARIO,
     CONF_ARM_HOME_SCENARIO,
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
+    CONF_EXCLUDED_ALARM_MEMORY_ZONES,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
+    CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+    DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
     DOMAIN,
     MANUFACTURER,
+    ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+    ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
 )
 from .coordinator import InimDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_zone_output(zone: dict[str, Any]) -> bool:
+    """Return true when the item represents an output instead of an alarm zone."""
+    return zone.get("Type") == 4
+
+
+def _is_alarm_memory_zone_excluded(
+    zone_id: int | None,
+    options: dict[str, Any],
+) -> bool:
+    """Return true when a zone was manually excluded from alarm memory exposure."""
+    if zone_id is None:
+        return True
+
+    excluded = {
+        str(value)
+        for value in options.get(CONF_EXCLUDED_ALARM_MEMORY_ZONES, [])
+    }
+    return str(zone_id) in excluded
+
+
+def _expose_alarm_memory_alarm_panels(options: dict[str, Any]) -> bool:
+    """Return true when alarm memories should be exposed as alarm panels."""
+    exposure = options.get(
+        CONF_ZONE_ALARM_MEMORY_EXPOSURE,
+        DEFAULT_ZONE_ALARM_MEMORY_EXPOSURE,
+    )
+    return exposure in (
+        ZONE_ALARM_MEMORY_EXPOSURE_ALARM_PANEL,
+        ZONE_ALARM_MEMORY_EXPOSURE_BOTH,
+    )
 
 
 async def async_setup_entry(
@@ -101,6 +142,26 @@ async def async_setup_entry(
                     options=options,
                 )
             )
+
+        if _expose_alarm_memory_alarm_panels(options):
+            for zone in device.get("zones", []):
+                zone_id = zone.get("ZoneId")
+                zone_name = zone.get("Name", f"Zone {zone_id}")
+
+                if zone.get("Visibility", 1) == 0:
+                    continue
+                if _is_zone_output(zone):
+                    continue
+                if _is_alarm_memory_zone_excluded(zone_id, options):
+                    continue
+
+                zone_memory_entity = InimZoneAlarmMemoryAlarmControlPanel(
+                    coordinator=coordinator,
+                    device_id=device_id,
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                )
+                entities.append(zone_memory_entity)
 
     async_add_entities(entities)
 
@@ -341,6 +402,116 @@ class InimAlarmControlPanel(
         """Handle updated data from the coordinator."""
         # Clear pending state when coordinator updates
         self._pending_state = None
+        self.async_write_ha_state()
+
+
+class InimZoneAlarmMemoryAlarmControlPanel(
+    CoordinatorEntity[InimDataUpdateCoordinator],
+    AlarmControlPanelEntity,
+):
+    """Read-only alarm panel backed by a zone alarm memory flag."""
+
+    _attr_has_entity_name = True
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_HOME
+        | AlarmControlPanelEntityFeature.ARM_AWAY
+    )
+    _attr_code_arm_required = False
+
+    def __init__(
+        self,
+        coordinator: InimDataUpdateCoordinator,
+        device_id: int,
+        zone_id: int,
+        zone_name: str,
+    ) -> None:
+        """Initialize the zone alarm memory alarm panel."""
+        super().__init__(coordinator)
+        # Keep supported features in _attr_supported_features; do not override
+        # Entity.supported_features.
+        self._attr_supported_features = (
+            AlarmControlPanelEntityFeature.ARM_HOME
+            | AlarmControlPanelEntityFeature.ARM_AWAY
+        )
+        self._device_id = device_id
+        self._zone_id = zone_id
+        self._zone_name = zone_name
+        self._attr_unique_id = f"{device_id}_zone_{zone_id}_alarm_memory_panel"
+        self._attr_name = f"Allarme {zone_name}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        device = self.coordinator.get_device(self._device_id)
+        if not device:
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self._device_id))},
+                manufacturer=MANUFACTURER,
+            )
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            manufacturer=MANUFACTURER,
+            model=device.get("model"),
+            name=device.get("name", "INIM Alarm"),
+            sw_version=device.get("firmware"),
+            serial_number=device.get("serial_number"),
+        )
+
+    @property
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        """Return triggered when the zone has alarm memory."""
+        zone = self.coordinator.get_zone(self._device_id, self._zone_id)
+        if not zone:
+            return None
+
+        if zone.get("AlarmMemory", 0) > 0:
+            return AlarmControlPanelState.TRIGGERED
+
+        return AlarmControlPanelState.DISARMED
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        zone = self.coordinator.get_zone(self._device_id, self._zone_id)
+        if not zone:
+            return {}
+
+        return {
+            ATTR_DEVICE_ID: self._device_id,
+            ATTR_ZONE_ID: self._zone_id,
+            ATTR_ALARM_MEMORY: zone.get("AlarmMemory", 0) > 0,
+            ATTR_TAMPER_MEMORY: zone.get("TamperMemory", 0) > 0,
+            ATTR_BYPASSED: zone.get("Bypassed", 0) > 0,
+            "source_zone_name": self._zone_name,
+            "areas": zone.get("Areas"),
+            "type": zone.get("Type"),
+        }
+
+    async def async_alarm_disarm(self, code: str | None = None) -> None:
+        """Ignore disarm requests; this panel only mirrors zone alarm memory."""
+        _LOGGER.debug(
+            "Ignoring disarm request for read-only zone alarm memory panel %s",
+            self._attr_unique_id,
+        )
+
+    async def async_alarm_arm_home(self, code: str | None = None) -> None:
+        """Ignore arm-home requests; this panel only mirrors zone alarm memory."""
+        _LOGGER.debug(
+            "Ignoring arm-home request for read-only zone alarm memory panel %s",
+            self._attr_unique_id,
+        )
+
+    async def async_alarm_arm_away(self, code: str | None = None) -> None:
+        """Ignore arm-away requests; this panel only mirrors zone alarm memory."""
+        _LOGGER.debug(
+            "Ignoring arm-away request for read-only zone alarm memory panel %s",
+            self._attr_unique_id,
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
         self.async_write_ha_state()
 
 

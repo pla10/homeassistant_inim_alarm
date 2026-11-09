@@ -57,7 +57,9 @@
           "arm_away_scenario": "Armed Away scenario",
           "arm_home_scenario": "Armed Home scenario",
           "disarm_scenario": "Disarm scenario",
-          "away_only_areas": "Away-only areas"
+          "away_only_areas": "Away-only areas",
+          "zone_alarm_memory_exposure": "Zone alarm memory exposure",
+          "excluded_alarm_memory_zones": "Exclude zones from alarm memory exposure"
         },
         "data_description": {
           "scan_interval": "How often to poll for updates (10-300 seconds)",
@@ -67,7 +69,9 @@
           "arm_away_scenario": "Panel scenario to activate for Armed Away (e.g. Total). Leave empty to arm all areas.",
           "arm_home_scenario": "Panel scenario to activate for Armed Home (e.g. Night/partial). Leave empty to arm all areas.",
           "disarm_scenario": "Panel scenario to activate for Disarm. Leave empty to disarm all areas.",
-          "away_only_areas": "Areas that should offer Armed Away but not Armed Home."
+          "away_only_areas": "Areas that should offer Armed Away but not Armed Home.",
+          "zone_alarm_memory_exposure": "Choose how per-zone AlarmMemory flags are exposed. Alarm panels are useful for HomeKit important security notifications.",
+          "excluded_alarm_memory_zones": "Zones selected here will not create alarm-memory binary sensors or read-only alarm panels."
         }
       },
       "area_scenarios": {
