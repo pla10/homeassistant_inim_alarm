@@ -24,6 +24,7 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     ZONE_STATUS_CLOSED,
+    ZONE_TYPES_OUTPUT,
 )
 from .coordinator import InimDataUpdateCoordinator
 
@@ -91,7 +92,11 @@ async def async_setup_entry(
             # Skip zones that are not visible
             if zone.get("Visibility", 1) == 0:
                 continue
-            
+
+            # Skip outputs: they are exposed as switches, not sensors
+            if zone.get("Type") in ZONE_TYPES_OUTPUT:
+                continue
+
             entities.append(
                 InimZoneBinarySensor(
                     coordinator=coordinator,

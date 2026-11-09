@@ -83,6 +83,13 @@ ATTR_BYPASSED = "bypassed"
 BYPASS_MODE_NORMAL = 0    # Reinserisci zona (toglie bypass)
 BYPASS_MODE_BYPASS = 3    # Bypassa zona
 
+# Outputs: zones of these Type values are commands, not sensors
+ZONE_TYPES_OUTPUT = (3, 4)
+# Output commands go through InsertZone: Mode selects on/off, Value is always 1
+OUTPUT_MODE_ON = 0
+OUTPUT_MODE_OFF = 3
+OUTPUT_COMMAND_VALUE = 1
+
 # Service names
 SERVICE_BYPASS_ZONE = "bypass_zone"
 SERVICE_ACTIVATE_SCENARIO = "activate_scenario"
