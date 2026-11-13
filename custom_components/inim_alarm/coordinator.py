@@ -56,14 +56,38 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
+        # Set by real-time events: the next refresh reads the cloud directly,
+        # without RequestPoll and its 5 s wait (the cloud already has the change)
+        self._event_refresh_devices: set[int] | None = None
+        # Set when an event refresh still found the old scenario: the next
+        # refresh sends RequestPoll only to these devices
+        self._poll_only_devices: set[int] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from INIM API."""
+        event_devices = self._event_refresh_devices
+        poll_only = self._poll_only_devices
+        self._event_refresh_devices = None
+        self._poll_only_devices = None
+        previous_scenarios = {
+            device.get("device_id"): device.get("active_scenario")
+            for device in (self.data or {}).get("devices", [])
+        }
+
+        if event_devices is not None:
+            devices_to_poll: list[dict[str, Any]] = []
+            _LOGGER.debug("Event refresh for devices %s: skipping RequestPoll", event_devices)
+        else:
+            devices_to_poll = [
+                device for device in self._devices
+                if poll_only is None or device.get("DeviceId") in poll_only
+            ]
+
         try:
             # First, request poll to wake up the central unit
             # This tells INIM to fetch fresh data from the panel
             poll_requested = False
-            for device in self._devices:
+            for device in devices_to_poll:
                 device_id = device.get("DeviceId")
                 if device_id:
                     try:
@@ -128,7 +152,26 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             # Check for alarm state changes and fire events
             self._check_alarm_triggered(data)
-            
+
+            if event_devices:
+                # The cloud may not have the new scenario yet: poll only the
+                # devices that sent the event, once
+                unchanged = {
+                    device["device_id"]
+                    for device in data["devices"]
+                    if device["device_id"] in event_devices
+                    and device.get("active_scenario")
+                    == previous_scenarios.get(device["device_id"])
+                }
+                if unchanged:
+                    _LOGGER.debug(
+                        "Active scenario unchanged after event for devices %s, "
+                        "scheduling RequestPoll",
+                        unchanged,
+                    )
+                    self._poll_only_devices = unchanged
+                    self.hass.async_create_task(self.async_request_refresh())
+
             return data
 
         except InimAuthError as err:
@@ -344,14 +387,21 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Uses Device_Id from the WS payload to match the correct device.
         """
         if not isinstance(event_data, dict):
-            _LOGGER.debug("WS event is not a dict, requesting poll for fresh state")
-            self.hass.async_create_task(self.async_request_refresh())
+            _LOGGER.debug(
+                "WS event is a %s, not a dict: requesting poll for fresh state",
+                type(event_data).__name__,
+            )
+            # No device is known: read the cloud, without follow-up polls
+            self._request_event_refresh(set())
             return
 
         if not self.data or "devices" not in self.data:
             return
 
+        _LOGGER.debug("WS event received with keys: %s", list(event_data))
+
         has_changes = False
+        area_change_devices: set[int] = set()
 
         def find_device(dev_id: int) -> dict[str, Any] | None:
             for d in self.data.get("devices", []):
@@ -383,12 +433,31 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if area.get("AreaId") == area_id:
                         device["areas"][idx].update(area_update)
                         has_changes = True
+                        area_change_devices.add(device_id)
                         break
 
         if has_changes:
             _LOGGER.debug("Applying partial updates from WebSocket")
             self._check_alarm_triggered(self.data)
+            # Note: this also restarts the polling timer from now
             self.async_set_updated_data(self.data)
+
+        if area_change_devices:
+            # WS events do not carry the active scenario: read it from the
+            # cloud now instead of waiting a full polling interval
+            _LOGGER.debug(
+                "Area change from WebSocket for devices %s, requesting refresh",
+                area_change_devices,
+            )
+            self._request_event_refresh(area_change_devices)
+
+    @callback
+    def _request_event_refresh(self, device_ids: set[int]) -> None:
+        """Refresh right away after a real-time event, without RequestPoll."""
+        if self._event_refresh_devices is None:
+            self._event_refresh_devices = set()
+        self._event_refresh_devices |= device_ids
+        self.hass.async_create_task(self.async_request_refresh())
 
     @callback
     def async_on_sia_update(self, zone_id: int, status_update: dict[str, Any]) -> None:
@@ -429,11 +498,13 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         has_changes = False
+        changed_device_id = None
         for device in self.data.get("devices", []):
             for idx, area in enumerate(device.get("areas", [])):
                 if area.get("AreaId") == area_id:
                     device["areas"][idx].update(status_update)
                     has_changes = True
+                    changed_device_id = device.get("device_id")
                     _LOGGER.debug(
                         "SIA update area %s: %s", area.get("Name", area_id), status_update
                     )
@@ -444,6 +515,10 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if has_changes:
             self._check_alarm_triggered(self.data)
             self.async_set_updated_data(self.data)
+            # SIA events do not carry the active scenario: read it from the cloud
+            self._request_event_refresh(
+                {changed_device_id} if changed_device_id else set()
+            )
 
     @property
     def devices(self) -> list[dict[str, Any]]:
