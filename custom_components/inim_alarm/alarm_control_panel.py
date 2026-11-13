@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Any
 
@@ -13,6 +14,7 @@ from homeassistant.components.alarm_control_panel import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -33,6 +35,7 @@ from .const import (
     CONF_ARM_HOME_SCENARIO,
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
+    CONF_REQUIRE_CODE_TO_DISARM,
     CONF_SCAN_INTERVAL,
     CONF_USER_CODE,
     DOMAIN,
@@ -65,6 +68,44 @@ def _mode_from_active_scenario(
             if value not in (None, "") and str(value) == str(active):
                 return mode
     return None
+
+
+def _validate_code(
+    entity: AlarmControlPanelEntity,
+    user_code: str,
+    code: str | None,
+    action: str,
+    required: bool,
+) -> None:
+    """Check a code entered in Home Assistant against the configured user code.
+
+    Without a configured user code there is nothing to compare against, so the
+    action is allowed. A missing code is refused only when required, while a
+    provided code must always match. Raises ServiceValidationError on refusal.
+    """
+    if not user_code:
+        return
+
+    if not code:
+        if not required:
+            return
+        reason = "code required"
+    elif hmac.compare_digest(str(code).encode(), str(user_code).encode()):
+        return
+    else:
+        reason = "invalid code"
+
+    # Never log the code itself
+    _LOGGER.warning(
+        "%s refused on %s: %s",
+        action,
+        entity.entity_id or entity.name,
+        reason,
+    )
+    raise ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key="invalid_code",
+    )
 
 
 async def async_setup_entry(
@@ -144,8 +185,7 @@ class InimAlarmControlPanel(
         AlarmControlPanelEntityFeature.ARM_HOME | 
         AlarmControlPanelEntityFeature.ARM_AWAY
     )
-    _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
-    _attr_code_arm_required = False  # Code requirement managed by Lovelace card
+    _attr_code_arm_required = False  # Arming works without a code
 
     def __init__(
         self,
@@ -163,8 +203,13 @@ class InimAlarmControlPanel(
         self._options = options or {}
         self._attr_unique_id = f"{device_id}_alarm"
         
-        # User code for API calls
+        # User code for API calls and for validating codes entered in HA
         self._user_code = self._options.get(CONF_USER_CODE, "")
+        self._require_code_to_disarm = self._options.get(
+            CONF_REQUIRE_CODE_TO_DISARM, True
+        )
+        # Show the keypad only when there is a user code to check against
+        self._attr_code_format = CodeFormat.NUMBER if self._user_code else None
         
         # Track arming state and mode
         self._pending_state: AlarmControlPanelState | None = None
@@ -330,11 +375,15 @@ class InimAlarmControlPanel(
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command for all areas."""
+        _validate_code(
+            self, self._user_code, code, "Disarm", self._require_code_to_disarm
+        )
         await self._async_run_action("Disarming", CONF_DISARM_SCENARIO, arm=False)
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command (partial protection or mapped scenario)."""
+        _validate_code(self, self._user_code, code, "Arm home", False)
         self._pending_state = AlarmControlPanelState.ARMING
         self._armed_mode = "home"
         self.async_write_ha_state()
@@ -351,6 +400,7 @@ class InimAlarmControlPanel(
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command (full protection or mapped scenario)."""
+        _validate_code(self, self._user_code, code, "Arm away", False)
         self._pending_state = AlarmControlPanelState.ARMING
         self._armed_mode = "away"
         self.async_write_ha_state()
@@ -383,8 +433,7 @@ class InimAreaAlarmControlPanel(
         AlarmControlPanelEntityFeature.ARM_HOME | 
         AlarmControlPanelEntityFeature.ARM_AWAY
     )
-    _attr_code_format = CodeFormat.NUMBER  # Enable numeric keypad
-    _attr_code_arm_required = False  # Code requirement managed by Lovelace card
+    _attr_code_arm_required = False  # Arming works without a code
 
     def __init__(
         self,
@@ -406,8 +455,13 @@ class InimAreaAlarmControlPanel(
         self._attr_unique_id = f"{device_id}_area_{area_id}"
         self._attr_name = area_name
         
-        # User code for API calls
+        # User code for API calls and for validating codes entered in HA
         self._user_code = self._options.get(CONF_USER_CODE, "")
+        self._require_code_to_disarm = self._options.get(
+            CONF_REQUIRE_CODE_TO_DISARM, True
+        )
+        # Show the keypad only when there is a user code to check against
+        self._attr_code_format = CodeFormat.NUMBER if self._user_code else None
         
         # Track arming state and mode
         self._pending_state: AlarmControlPanelState | None = None
@@ -568,6 +622,9 @@ class InimAreaAlarmControlPanel(
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command for this area."""
+        _validate_code(
+            self, self._user_code, code, "Disarm", self._require_code_to_disarm
+        )
         if await self._async_run_action(
             "Disarming", CONF_DISARM_SCENARIO, arm=False
         ):
@@ -575,6 +632,7 @@ class InimAreaAlarmControlPanel(
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command for this area (partial protection)."""
+        _validate_code(self, self._user_code, code, "Arm home", False)
         if self._away_only:
             _LOGGER.warning(
                 "Cannot arm area %s in Home mode: area is configured as Away-only",
@@ -598,6 +656,7 @@ class InimAreaAlarmControlPanel(
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command for this area (full protection)."""
+        _validate_code(self, self._user_code, code, "Arm away", False)
         self._pending_state = AlarmControlPanelState.ARMING
         self._armed_mode = "away"
         self.async_write_ha_state()

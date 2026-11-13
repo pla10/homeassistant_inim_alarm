@@ -26,6 +26,7 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_REQUIRE_CODE_TO_DISARM,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
@@ -90,6 +91,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_SCAN_INTERVAL: scan_interval_seconds,
             # User code from entry.data (setup) with fallback to options (legacy)
             CONF_USER_CODE: entry.data.get(CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")),
+            # Check codes entered in HA against the user code when disarming
+            CONF_REQUIRE_CODE_TO_DISARM: entry.options.get(CONF_REQUIRE_CODE_TO_DISARM, True),
             # Optional scenario mapping for the main panel (empty = use InsertAreas)
             CONF_ARM_AWAY_SCENARIO: entry.options.get(CONF_ARM_AWAY_SCENARIO),
             CONF_ARM_HOME_SCENARIO: entry.options.get(CONF_ARM_HOME_SCENARIO),

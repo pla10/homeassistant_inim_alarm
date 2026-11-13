@@ -57,7 +57,8 @@
           "arm_away_scenario": "Scenario Inserimento Totale",
           "arm_home_scenario": "Scenario Inserimento Parziale",
           "disarm_scenario": "Scenario Disinserimento",
-          "away_only_areas": "Aree solo inserimento totale"
+          "away_only_areas": "Aree solo inserimento totale",
+          "require_code_to_disarm": "Richiedi codice per disinserire"
         },
         "data_description": {
           "scan_interval": "Frequenza aggiornamento dati (10-300 secondi)",
@@ -67,7 +68,8 @@
           "arm_away_scenario": "Scenario del pannello da attivare per l'inserimento totale (es. Totale). Lascia vuoto per inserire tutte le aree.",
           "arm_home_scenario": "Scenario del pannello da attivare per l'inserimento parziale (es. Notte/parziale). Lascia vuoto per inserire tutte le aree.",
           "disarm_scenario": "Scenario del pannello da attivare per il disinserimento. Lascia vuoto per disinserire tutte le aree.",
-          "away_only_areas": "Aree che devono offrire solo Inserimento Totale, senza Inserimento Parziale."
+          "away_only_areas": "Aree che devono offrire solo Inserimento Totale, senza Inserimento Parziale.",
+          "require_code_to_disarm": "Se è configurato un codice utente, per disinserire da Home Assistant bisogna inserirlo. Disattiva solo se hai automazioni che disinseriscono senza codice. Senza codice utente il tastierino non viene mostrato e nessun codice viene verificato."
         }
       },
       "area_scenarios": {
@@ -131,6 +133,11 @@
           "description": "L'ID dello scenario da attivare"
         }
       }
+    }
+  },
+  "exceptions": {
+    "invalid_code": {
+      "message": "Codice allarme non valido o mancante."
     }
   }
 }

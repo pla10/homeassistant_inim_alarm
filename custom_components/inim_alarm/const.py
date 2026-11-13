@@ -16,6 +16,8 @@ CONF_ARM_AWAY_SCENARIO = "arm_away_scenario"
 CONF_ARM_HOME_SCENARIO = "arm_home_scenario"
 CONF_DISARM_SCENARIO = "disarm_scenario"
 CONF_USER_CODE = "user_code"
+# When a user code is configured, disarming from HA requires entering it
+CONF_REQUIRE_CODE_TO_DISARM = "require_code_to_disarm"
 CONF_AWAY_ONLY_AREAS = "away_only_areas"
 CONF_AREA = "area"
 CONF_AREA_SCENARIOS = "area_scenarios"

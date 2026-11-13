@@ -29,6 +29,7 @@ from .const import (
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_REMOVE_AREA_SCENARIO_MAPPING,
+    CONF_REQUIRE_CODE_TO_DISARM,
     CONF_USER_CODE,
     DEFAULT_SIA_PORT,
     DOMAIN,
@@ -207,6 +208,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 CONF_ARM_HOME_SCENARIO,
                 CONF_DISARM_SCENARIO,
                 CONF_AWAY_ONLY_AREAS,
+                CONF_REQUIRE_CODE_TO_DISARM,
             ):
                 options.pop(key, None)
             options.update(user_input)
@@ -226,6 +228,9 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
         current_sia_account = self.config_entry.options.get(
             CONF_SIA_ACCOUNT,
             self.config_entry.data.get(CONF_SIA_ACCOUNT, ""),
+        )
+        current_require_code = self.config_entry.options.get(
+            CONF_REQUIRE_CODE_TO_DISARM, True
         )
 
         # Build the scenario list from the coordinator so users pick by name.
@@ -289,6 +294,10 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                     CONF_SIA_ACCOUNT,
                     default=current_sia_account,
                 ): str,
+                vol.Optional(
+                    CONF_REQUIRE_CODE_TO_DISARM,
+                    default=current_require_code,
+                ): bool,
                 **scenario_schema,
                 **area_schema,
             }
