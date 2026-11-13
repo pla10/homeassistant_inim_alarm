@@ -131,6 +131,21 @@ SIA-IP provides the fastest updates by receiving events directly from the panel 
    - Set the same **port** configured on the panel
    - Optionally set the **SIA Account ID** to filter messages
 
+#### Real-time zone updates
+
+To see doors and sensors open and close in real time (not only alarms), add SIA-IP to the
+**"Real-time zone"** event of each zone you need (activation and restore). The integration
+understands these SIA codes:
+
+| Codes | Meaning | Notes |
+| --- | --- | --- |
+| `UA` / `UR` | Zone open / closed | Recommended: pick the "Untyped zone alarm" pair in the event's SIA codes. Each message says whether the zone opened or closed. |
+| `UX` | Zone changed | Sent by the dialer's automatic codes for both activation and restore, so the integration flips the zone each time. A lost message leaves the zone inverted until the next poll (up to 5 minutes). |
+| `BA` / `BR`, `TA` / `TR` | Burglary / tamper alarm and restore | Also set the zone's alarm memory. |
+
+Motion sensors send an event every time they detect movement, which can fill the panel's
+dialer queue: enable the real-time event only on the zones you need.
+
 > **Note:** SIA-IP requires your HA instance to be reachable from the panel on the configured port. Make sure your firewall allows incoming TCP connections on that port.
 
 ## 🏠 Entities Created
