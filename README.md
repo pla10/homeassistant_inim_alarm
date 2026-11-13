@@ -102,6 +102,7 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | **SIA Account ID** | Filter by SIA account (leave empty for all) | Empty |
 | **Armed Away / Armed Home / Disarm scenario** | Optional scenarios for the main alarm control | Empty |
 | **Away-only areas** | Areas that should offer Armed Away but not Armed Home | Empty |
+| **Require code to disarm** | Disarming from Home Assistant requires the configured user code | On |
 | **Per-area scenario mappings** | Optional scenario mappings for individual area controls | Empty |
 
 #### Scenario mappings
@@ -183,20 +184,26 @@ SIA-IP provides the fastest updates by receiving events directly from the panel 
 > 3. Show disabled entities
 > 4. Enable the scenario buttons you need
 
-## 🔢 Lovelace Keypad
+## 🔢 Alarm Code
 
-To show a keypad on the alarm panel card (for UI security), use:
+When a user code is configured, the alarm panels show a numeric keypad and the integration checks the code entered in Home Assistant against it:
+
+- **Disarm** requires the user code. A missing or wrong code is rejected.
+- **Arm Home / Arm Away** work without a code, but a wrong code is rejected.
+
+Automations that disarm must pass the code:
 
 ```yaml
-type: alarm-panel
-entity: alarm_control_panel.your_alarm
-states:
-  - arm_away
-require_code: true  # Shows numeric keypad
+action: alarm_control_panel.alarm_disarm
+target:
+  entity_id: alarm_control_panel.your_alarm
+data:
+  code: "1234"
 ```
 
-> **Note:** The keypad code is managed by Lovelace, not the integration.
-> You can set any code you want for the UI - it doesn't need to match your alarm code.
+or turn off **Require code to disarm** in the integration options. Without a user code, no keypad is shown and no code is checked.
+
+> **Note:** Scenario buttons and the `inim_alarm.activate_scenario` service do not ask for a code. Restrict access to them if a scenario disarms the alarm.
 
 ## 📖 Services
 
