@@ -421,6 +421,17 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.async_set_updated_data(self.data)
 
     @callback
+    def async_on_sia_zone_toggle(self, zone_id: int) -> None:
+        """Flip a zone between open and closed on a direction-less SIA event."""
+        for device in (self.data or {}).get("devices", []):
+            for zone in device.get("zones", []):
+                z_id = zone.get("ZoneId")
+                if z_id is not None and (z_id == zone_id or z_id % 1000 == zone_id):
+                    new_status = 1 if zone.get("Status") == 2 else 2
+                    self.async_on_sia_update(zone_id, {"Status": new_status})
+                    return
+
+    @callback
     def async_on_sia_area_update(
         self, area_id: int, status_update: dict[str, Any]
     ) -> None:
