@@ -51,6 +51,7 @@
         "description": "Configure polling, SIA-IP, scenario mapping and area arming modes.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
+          "request_poll_interval": "Panel refresh interval (seconds)",
           "enable_sia": "Enable SIA-IP listener",
           "sia_port": "SIA-IP port",
           "sia_account": "SIA Account ID (optional)",
@@ -61,7 +62,8 @@
           "require_code_to_disarm": "Require code to disarm"
         },
         "data_description": {
-          "scan_interval": "How often to poll for updates (10-300 seconds)",
+          "scan_interval": "How often to read the latest data from INIM Cloud (10-3600 seconds)",
+          "request_poll_interval": "How often the panel is asked to send fresh zone data to INIM Cloud (60-3600 seconds). INIM Cloud rate-limits these requests (about 250 per day), so values below about 350 seconds may hit the limit.",
           "enable_sia": "Enable local SIA-IP TCP listener for real-time updates from the panel",
           "sia_port": "TCP port for the SIA-IP listener (default: 6001)",
           "sia_account": "Filter messages by SIA account ID. Leave empty to accept all.",
@@ -95,6 +97,12 @@
           "remove_area_scenario_mapping": "Delete all explicit scenario mappings for this area."
         }
       }
+    }
+  },
+  "issues": {
+    "request_poll_rate_limited": {
+      "title": "INIM Cloud is rate-limiting {device_name}",
+      "description": "INIM Cloud is rejecting refresh requests for {device_name} (rate limit). Zone states may be stale until it recovers; the integration pauses refresh requests and retries automatically.\n\nINIM Cloud allows about 250 refresh requests per day. The panel refresh interval is currently {request_poll_interval} seconds: if this keeps happening, increase the \"Panel refresh interval\" in the integration options."
     }
   },
   "services": {

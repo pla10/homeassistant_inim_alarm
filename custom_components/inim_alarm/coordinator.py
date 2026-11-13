@@ -8,19 +8,22 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import InimApi, InimApiError, InimAuthError
+from .api import InimApi, InimApiError, InimAuthError, InimRateLimitError
 from .websocket import InimWebSocketClient
 from .const import (
     CHANGED_BY_EXTERNAL,
     CHANGED_BY_HOME_ASSISTANT,
     CHANGED_BY_UNKNOWN,
+    DEFAULT_REQUEST_POLL_INTERVAL_SECONDS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EVENT_ALARM_TRIGGERED,
     EVENT_STATE_CHANGED,
+    REQUEST_POLL_RATE_LIMIT_BACKOFF,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +39,9 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         api: InimApi,
         update_interval: timedelta = DEFAULT_SCAN_INTERVAL,
+        request_poll_interval: timedelta = timedelta(
+            seconds=DEFAULT_REQUEST_POLL_INTERVAL_SECONDS
+        ),
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -56,6 +62,12 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track last change info per entity
         self._last_changed_by: dict[str, str] = {}
         self._last_changed_at: dict[str, datetime] = {}
+        # RequestPoll throttling/backoff per device (INIM Cloud rate-limits it)
+        self._request_poll_interval = request_poll_interval
+        self._last_request_poll: dict[int, datetime] = {}
+        self._request_poll_backoff_until: dict[int, datetime] = {}
+        self._request_poll_failures: dict[int, int] = {}
+        self._request_poll_rate_limited: dict[int, bool] = {}
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from INIM API."""
@@ -65,25 +77,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             poll_requested = False
             for device in self._devices:
                 device_id = device.get("DeviceId")
-                if device_id:
-                    try:
-                        await self.api.request_poll(device_id)
-                        _LOGGER.debug("Requested poll for device %s", device_id)
-                        poll_requested = True
-                    except InimAuthError as err:
-                        _LOGGER.debug(
-                            "RequestPoll auth error for device %s: %s, token was refreshed",
-                            device_id, err,
-                        )
-                        # Token was refreshed inside request_poll, retry once
-                        try:
-                            await self.api.request_poll(device_id)
-                            _LOGGER.debug("Requested poll for device %s after re-auth", device_id)
-                            poll_requested = True
-                        except Exception as retry_err:
-                            _LOGGER.warning("RequestPoll retry failed for device %s: %s", device_id, retry_err)
-                    except Exception as err:
-                        _LOGGER.debug("RequestPoll failed for device %s: %s", device_id, err)
+                if device_id and await self._async_request_poll(device_id):
+                    poll_requested = True
             
             # Wait for central to send data to cloud (5 seconds required)
             if poll_requested:
@@ -140,6 +135,134 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.exception("Unexpected error updating INIM data")
             raise UpdateFailed(f"Unexpected error: {err}") from err
+
+    async def _async_request_poll(self, device_id: int) -> bool:
+        """Send RequestPoll for a device, honouring throttle and rate-limit backoff.
+
+        Returns True if a poll was sent, False if it was skipped or failed.
+        """
+        now = dt_util.utcnow()
+
+        backoff_until = self._request_poll_backoff_until.get(device_id)
+        if backoff_until is not None:
+            if now < backoff_until:
+                _LOGGER.debug(
+                    "Skipping RequestPoll for device %s: rate-limit backoff until %s",
+                    device_id, backoff_until,
+                )
+                return False
+            del self._request_poll_backoff_until[device_id]
+
+        last_poll = self._last_request_poll.get(device_id)
+        if last_poll is not None and now - last_poll < self._request_poll_interval:
+            _LOGGER.debug(
+                "Skipping RequestPoll for device %s: last sent %ds ago (interval %ds)",
+                device_id,
+                (now - last_poll).total_seconds(),
+                self._request_poll_interval.total_seconds(),
+            )
+            return False
+
+        # Count attempts, not successes: failed calls still use up the quota
+        self._last_request_poll[device_id] = now
+
+        try:
+            try:
+                await self.api.request_poll(device_id)
+            except InimAuthError as err:
+                _LOGGER.debug(
+                    "RequestPoll auth error for device %s: %s, token was refreshed",
+                    device_id, err,
+                )
+                # Token was refreshed inside request_poll, retry once
+                await self.api.request_poll(device_id)
+        except InimRateLimitError as err:
+            self._request_poll_failures[device_id] = (
+                self._request_poll_failures.get(device_id, 0) + 1
+            )
+            self._enter_request_poll_backoff(device_id, now, err)
+            return False
+        except Exception as err:
+            failures = self._request_poll_failures.get(device_id, 0) + 1
+            self._request_poll_failures[device_id] = failures
+            if failures == 1:
+                _LOGGER.warning(
+                    "RequestPoll failed for device %s: %s (zone states may be stale)",
+                    device_id, err,
+                )
+            else:
+                _LOGGER.debug(
+                    "RequestPoll failed for device %s (%d consecutive failures): %s",
+                    device_id, failures, err,
+                )
+            return False
+
+        _LOGGER.debug("Requested poll for device %s", device_id)
+        failures = self._request_poll_failures.pop(device_id, 0)
+        if self._request_poll_rate_limited.pop(device_id, False):
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"request_poll_rate_limited_{device_id}"
+            )
+        if failures:
+            _LOGGER.info(
+                "RequestPoll for device %s succeeded again after %d failed attempt(s)",
+                device_id, failures,
+            )
+        return True
+
+    def _enter_request_poll_backoff(
+        self, device_id: int, now: datetime, err: InimApiError
+    ) -> None:
+        """Pause RequestPoll for a device after INIM Cloud rate-limited it."""
+        resume_at = now + REQUEST_POLL_RATE_LIMIT_BACKOFF
+        self._request_poll_backoff_until[device_id] = resume_at
+
+        if self._request_poll_rate_limited.get(device_id):
+            # Still rate-limited after a backoff: already warned and raised the issue
+            _LOGGER.debug(
+                "RequestPoll still rate-limited for device %s: %s, retrying at %s",
+                device_id, err, dt_util.as_local(resume_at).strftime("%H:%M"),
+            )
+            return
+
+        self._request_poll_rate_limited[device_id] = True
+        _LOGGER.warning(
+            "INIM Cloud is rate-limiting RequestPoll for device %s (%s): pausing it "
+            "until %s, zone states may be stale meanwhile",
+            device_id, err, dt_util.as_local(resume_at).strftime("%H:%M"),
+        )
+
+        device_name = next(
+            (
+                device.get("Name")
+                for device in self._devices
+                if device.get("DeviceId") == device_id and device.get("Name")
+            ),
+            str(device_id),
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"request_poll_rate_limited_{device_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="request_poll_rate_limited",
+            translation_placeholders={
+                "device_name": device_name,
+                "request_poll_interval": str(
+                    int(self._request_poll_interval.total_seconds())
+                ),
+            },
+        )
+
+    @callback
+    def async_clear_request_poll_issues(self) -> None:
+        """Remove the rate-limit repair issues raised by this coordinator."""
+        for device_id in self._request_poll_rate_limited:
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"request_poll_rate_limited_{device_id}"
+            )
+        self._request_poll_rate_limited.clear()
 
     def get_device(self, device_id: int) -> dict[str, Any] | None:
         """Get a specific device by ID."""

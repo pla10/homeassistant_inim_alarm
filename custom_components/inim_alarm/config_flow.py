@@ -25,12 +25,14 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_REQUEST_POLL_INTERVAL,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_REMOVE_AREA_SCENARIO_MAPPING,
     CONF_REQUIRE_CODE_TO_DISARM,
     CONF_USER_CODE,
+    DEFAULT_REQUEST_POLL_INTERVAL_SECONDS,
     DEFAULT_SIA_PORT,
     DOMAIN,
 )
@@ -201,6 +203,7 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
             options = dict(self.config_entry.options)
             for key in (
                 CONF_SCAN_INTERVAL,
+                CONF_REQUEST_POLL_INTERVAL,
                 CONF_ENABLE_SIA,
                 CONF_SIA_PORT,
                 CONF_SIA_ACCOUNT,
@@ -216,6 +219,9 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
 
         # Get current values
         current_scan = self.config_entry.options.get(CONF_SCAN_INTERVAL, 30)
+        current_request_poll = self.config_entry.options.get(
+            CONF_REQUEST_POLL_INTERVAL, DEFAULT_REQUEST_POLL_INTERVAL_SECONDS
+        )
 
         current_sia = self.config_entry.options.get(
             CONF_ENABLE_SIA,
@@ -281,7 +287,11 @@ class InimAlarmOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_SCAN_INTERVAL,
                     default=current_scan,
-                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+                vol.Required(
+                    CONF_REQUEST_POLL_INTERVAL,
+                    default=current_request_poll,
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
                 vol.Optional(
                     CONF_ENABLE_SIA,
                     default=current_sia,

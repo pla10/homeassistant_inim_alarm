@@ -26,11 +26,13 @@ from .const import (
     CONF_AWAY_ONLY_AREAS,
     CONF_DISARM_SCENARIO,
     CONF_ENABLE_SIA,
+    CONF_REQUEST_POLL_INTERVAL,
     CONF_REQUIRE_CODE_TO_DISARM,
     CONF_SCAN_INTERVAL,
     CONF_SIA_ACCOUNT,
     CONF_SIA_PORT,
     CONF_USER_CODE,
+    DEFAULT_REQUEST_POLL_INTERVAL_SECONDS,
     DEFAULT_SIA_PORT,
     DOMAIN,
     PLATFORMS,
@@ -78,7 +80,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     update_interval = timedelta(seconds=scan_interval_seconds)
 
-    coordinator = InimDataUpdateCoordinator(hass, api, update_interval)
+    # RequestPoll is throttled separately: INIM Cloud rate-limits it
+    request_poll_interval_seconds = entry.options.get(
+        CONF_REQUEST_POLL_INTERVAL, DEFAULT_REQUEST_POLL_INTERVAL_SECONDS
+    )
+
+    coordinator = InimDataUpdateCoordinator(
+        hass,
+        api,
+        update_interval,
+        request_poll_interval=timedelta(seconds=request_poll_interval_seconds),
+    )
     
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -89,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "options": {
             CONF_SCAN_INTERVAL: scan_interval_seconds,
+            CONF_REQUEST_POLL_INTERVAL: request_poll_interval_seconds,
             # User code from entry.data (setup) with fallback to options (legacy)
             CONF_USER_CODE: entry.data.get(CONF_USER_CODE, entry.options.get(CONF_USER_CODE, "")),
             # Check codes entered in HA against the user code when disarming
@@ -147,6 +160,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = data.get("coordinator")
         if coordinator:
             await coordinator.async_stop_websocket()
+            coordinator.async_clear_request_poll_issues()
         sia_server = data.get("sia_server")
         if sia_server:
             sia_server.close()
