@@ -513,7 +513,12 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if has_changes:
             _LOGGER.debug("Applying partial updates from WebSocket")
             self._check_alarm_triggered(self.data)
-            self.async_set_updated_data(self.data)
+            self._async_push_realtime_data()
+
+    @callback
+    def _async_push_realtime_data(self) -> None:
+        """Notify entities of data patched in place, keeping the poll schedule."""
+        self.async_update_listeners()
 
     @callback
     def async_on_sia_update(self, zone_id: int, status_update: dict[str, Any]) -> None:
@@ -525,12 +530,8 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for device in self.data.get("devices", []):
             for idx, zone in enumerate(device.get("zones", [])):
                 z_id = zone.get("ZoneId")
-                
-                # Ignora le zone senza ID
                 if z_id is None:
                     continue
-                
-                # Handle INIM Cloud 1000 offset for wireless and double zones
                 if z_id == zone_id or z_id % 1000 == zone_id:
                     device["zones"][idx].update(status_update)
                     has_changes = True
@@ -543,7 +544,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if has_changes:
             self._check_alarm_triggered(self.data)
-            self.async_set_updated_data(self.data)
+            self._async_push_realtime_data()
 
     @callback
     def async_on_sia_area_update(
@@ -568,7 +569,7 @@ class InimDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if has_changes:
             self._check_alarm_triggered(self.data)
-            self.async_set_updated_data(self.data)
+            self._async_push_realtime_data()
 
     @property
     def devices(self) -> list[dict[str, Any]]:
