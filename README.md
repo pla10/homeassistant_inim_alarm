@@ -97,7 +97,7 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | Option | Description | Default |
 |--------|-------------|---------|
 | **Polling Interval** | How often to read the full state from INIM Cloud (10-3600s) | 30s (300s if SIA-IP enabled) |
-| **Panel refresh interval** | How often the panel is asked to push fresh zone data to INIM Cloud (`RequestPoll`, 60-3600s) | 360s |
+| **Panel refresh interval** | How often the panel is asked to push fresh zone data to INIM Cloud (`RequestPoll`, 60-3600s) | 450s |
 | **Enable SIA-IP** | Enable local SIA-IP TCP listener | Off |
 | **SIA-IP Port** | TCP port for SIA-IP listener | 6001 |
 | **SIA Account ID** | Filter by SIA account (leave empty for all) | Empty |
@@ -106,7 +106,7 @@ Go to **Settings** → **Devices & Services** → **INIM Alarm** → **Configure
 | **Require code to disarm** | Disarming from Home Assistant requires the configured user code | On |
 | **Per-area scenario mappings** | Optional scenario mappings for individual area controls | Empty |
 
-> **INIM Cloud rate limit:** INIM Cloud allows roughly 250 panel refresh requests per day. The default panel refresh interval (360s = 240/day) stays under it; values below ~350s may hit the limit. When INIM Cloud rate-limits the panel, the integration pauses refresh requests for 30 minutes, logs a warning and raises a repair issue.
+> **INIM Cloud rate limit:** INIM Cloud allows roughly 250 panel refresh requests per day. The default panel refresh interval (450s = 192/day) leaves headroom under it; lower values may hit the limit. When INIM Cloud rate-limits the panel, the integration pauses refresh requests, logs a warning and raises a repair issue. The pause starts at 30 minutes and doubles after each further rejection, up to 4 hours; the repair issue stays until a refresh request succeeds again, also when the integration is reloaded.
 
 #### Scenario mappings
 

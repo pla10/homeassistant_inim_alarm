@@ -63,7 +63,7 @@
         },
         "data_description": {
           "scan_interval": "How often to read the latest data from INIM Cloud (10-3600 seconds)",
-          "request_poll_interval": "How often the panel is asked to send fresh zone data to INIM Cloud (60-3600 seconds). INIM Cloud rate-limits these requests (about 250 per day), so values below about 350 seconds may hit the limit.",
+          "request_poll_interval": "How often the panel is asked to send fresh zone data to INIM Cloud (60-3600 seconds). INIM Cloud rate-limits these requests (about 250 per day), so values below the default of 450 seconds may hit the limit.",
           "enable_sia": "Enable local SIA-IP TCP listener for real-time updates from the panel",
           "sia_port": "TCP port for the SIA-IP listener (default: 6001)",
           "sia_account": "Filter messages by SIA account ID. Leave empty to accept all.",

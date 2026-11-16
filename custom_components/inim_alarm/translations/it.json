@@ -63,7 +63,7 @@
         },
         "data_description": {
           "scan_interval": "Frequenza di lettura dei dati da INIM Cloud (10-3600 secondi)",
-          "request_poll_interval": "Ogni quanto viene chiesto alla centrale di inviare a INIM Cloud lo stato aggiornato delle zone (60-3600 secondi). INIM Cloud limita queste richieste (circa 250 al giorno), quindi valori inferiori a circa 350 secondi possono superare il limite.",
+          "request_poll_interval": "Ogni quanto viene chiesto alla centrale di inviare a INIM Cloud lo stato aggiornato delle zone (60-3600 secondi). INIM Cloud limita queste richieste (circa 250 al giorno), quindi valori inferiori al predefinito di 450 secondi possono superare il limite.",
           "enable_sia": "Abilita il listener TCP SIA-IP locale per aggiornamenti in tempo reale dal pannello",
           "sia_port": "Porta TCP per il listener SIA-IP (default: 6001)",
           "sia_account": "Filtra messaggi per ID account SIA. Lascia vuoto per accettare tutti.",

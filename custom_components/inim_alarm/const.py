@@ -52,10 +52,10 @@ METHOD_INSERT_ZONE = "InsertZone"
 
 # Default values
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
-# 360 s = 240 RequestPoll/day, under the ~250/day INIM Cloud quota
-DEFAULT_REQUEST_POLL_INTERVAL_SECONDS = 360
-# Pause RequestPoll for a device after INIM Cloud rate-limits it
-REQUEST_POLL_RATE_LIMIT_BACKOFF = timedelta(minutes=30)
+DEFAULT_REQUEST_POLL_INTERVAL_SECONDS = 450
+REQUEST_POLL_RATE_LIMIT_INITIAL_BACKOFF = timedelta(minutes=30)
+REQUEST_POLL_RATE_LIMIT_MAX_BACKOFF = timedelta(hours=4)
+REQUEST_POLL_ISSUE_PREFIX = "request_poll_rate_limited_"
 DEFAULT_CLIENT_NAME = "HomeAssistant"
 
 # Zone Status (from API, subtract 1 for binary state)

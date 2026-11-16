@@ -13,6 +13,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import InimApi, InimApiError, InimAuthError
@@ -36,6 +37,7 @@ from .const import (
     DEFAULT_SIA_PORT,
     DOMAIN,
     PLATFORMS,
+    REQUEST_POLL_ISSUE_PREFIX,
     SERVICE_ACTIVATE_SCENARIO,
     SERVICE_BYPASS_ZONE,
 )
@@ -160,7 +162,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = data.get("coordinator")
         if coordinator:
             await coordinator.async_stop_websocket()
-            coordinator.async_clear_request_poll_issues()
         sia_server = data.get("sia_server")
         if sia_server:
             sia_server.close()
@@ -170,6 +171,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await api.close()
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the rate-limit repair issues when the entry is deleted."""
+    issue_registry = ir.async_get(hass)
+    for domain, issue_id in list(issue_registry.issues):
+        if domain == DOMAIN and issue_id.startswith(REQUEST_POLL_ISSUE_PREFIX):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
