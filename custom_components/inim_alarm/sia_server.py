@@ -154,11 +154,10 @@ async def async_start_sia_server(
 
 def _process_sia_event(coordinator: Any, parsed: dict) -> None:
     """Route a parsed SIA event to the coordinator."""
-    zone_id_str = parsed.get("event_zone")
     event_class = parsed.get("event_class")
 
-    if not event_class or not zone_id_str:
-        _LOGGER.debug("SIA-IP Ignoring event without class/zone: %s", parsed.get("raw"))
+    if not event_class:
+        _LOGGER.debug("SIA-IP Ignoring event without class: %s", parsed.get("raw"))
         return
 
     _LOGGER.debug(
@@ -167,19 +166,40 @@ def _process_sia_event(coordinator: Any, parsed: dict) -> None:
         parsed.get("account"),
     )
 
-    try:
-        # SIA events are 1-indexed, INIM API is 0-indexed
-        id_int = int(zone_id_str) - 1
-    except ValueError:
-        _LOGGER.error("SIA-IP Invalid zone/area ID: %s", zone_id_str)
+    if event_class in AREA_EVENT_CODES:
+        partition = parsed.get("partition") or ""
+        partition_match = re.fullmatch(r"(?:ri|pi)(\d+)", partition)
+        if not partition_match:
+            _LOGGER.debug(
+                "SIA-IP Ignoring area event without a valid partition: %s",
+                parsed.get("raw"),
+            )
+            return
+
+        # The partition identifies the area. Digits after CL/OP identify the
+        # user that performed the operation and must not be used as an area ID.
+        area_id = int(partition_match.group(1)) - 1
+        if area_id < 0:
+            return
+        armed_value = 4 if event_class in AREA_DISARM_CODES else 1
+        coordinator.async_on_sia_area_update(area_id, {"Armed": armed_value})
         return
 
-    if event_class in AREA_EVENT_CODES:
-        armed_value = 4 if event_class in AREA_DISARM_CODES else 1
-        coordinator.async_on_sia_area_update(id_int, {"Armed": armed_value})
-    elif event_class in ZONE_ALARM_CODES:
-        coordinator.async_on_sia_update(id_int, {"Status": 2, "AlarmMemory": True})
+    zone_id_str = parsed.get("event_zone")
+    if not zone_id_str:
+        _LOGGER.debug("SIA-IP Ignoring zone event without zone: %s", parsed.get("raw"))
+        return
+
+    try:
+        # SIA events are 1-indexed, INIM API is 0-indexed
+        zone_id = int(zone_id_str) - 1
+    except ValueError:
+        _LOGGER.error("SIA-IP Invalid zone ID: %s", zone_id_str)
+        return
+
+    if event_class in ZONE_ALARM_CODES:
+        coordinator.async_on_sia_update(zone_id, {"Status": 2, "AlarmMemory": True})
     elif event_class in ZONE_RESTORE_CODES:
-        coordinator.async_on_sia_update(id_int, {"Status": 1})
+        coordinator.async_on_sia_update(zone_id, {"Status": 1})
     else:
         _LOGGER.debug("SIA-IP Unhandled event class: %s", event_class)
