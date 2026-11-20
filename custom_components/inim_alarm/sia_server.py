@@ -83,7 +83,14 @@ AREA_EVENT_CODES = AREA_ARM_CODES | AREA_DISARM_CODES
 
 # SIA event codes for zone alarm/restore
 ZONE_ALARM_CODES = {"BA", "TA"}
-ZONE_RESTORE_CODES = {"BR", "TR"}
+ZONE_RESTORE_CODES = {"BR", "TR", "UR"}
+# Untyped zone events: the panel's "Real-time zone" event reports every zone
+# activation (door opened, motion) whether or not the area is armed, so they
+# open the zone without setting the alarm memory.
+ZONE_OPEN_CODES = {"UA"}
+# With the dialer's automatic codes the panel sends UX for both activation and
+# restore, so each UX flips the zone; the periodic cloud poll corrects any drift.
+ZONE_TOGGLE_CODES = {"UX"}
 
 
 async def async_start_sia_server(
@@ -111,6 +118,7 @@ async def async_start_sia_server(
                 if not data:
                     break
 
+                _LOGGER.debug("SIA-IP Raw data from %s: %r", addr, data)
                 message = data.decode("ascii", errors="ignore").strip()
                 if not message:
                     continue
@@ -179,7 +187,11 @@ def _process_sia_event(coordinator: Any, parsed: dict) -> None:
         coordinator.async_on_sia_area_update(id_int, {"Armed": armed_value})
     elif event_class in ZONE_ALARM_CODES:
         coordinator.async_on_sia_update(id_int, {"Status": 2, "AlarmMemory": True})
+    elif event_class in ZONE_OPEN_CODES:
+        coordinator.async_on_sia_update(id_int, {"Status": 2})
     elif event_class in ZONE_RESTORE_CODES:
         coordinator.async_on_sia_update(id_int, {"Status": 1})
+    elif event_class in ZONE_TOGGLE_CODES:
+        coordinator.async_on_sia_zone_toggle(id_int)
     else:
         _LOGGER.debug("SIA-IP Unhandled event class: %s", event_class)
