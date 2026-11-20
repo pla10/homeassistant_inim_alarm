@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Any
 from urllib.parse import quote
@@ -29,6 +30,15 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# The whole request (Token, credentials, user code) travels in the ?req= query
+# string, so it must never end up in exception messages or logs.
+_REQ_QUERY_RE = re.compile(r"req=[^\s'\"]*")
+
+
+def _redact(text: str) -> str:
+    """Redact the ?req= query content from a string (e.g. an aiohttp error)."""
+    return _REQ_QUERY_RE.sub("req=<redacted>", text)
+
 
 class InimApiError(Exception):
     """Exception for INIM API errors."""
@@ -41,6 +51,10 @@ class InimApiError(Exception):
 
 class InimAuthError(InimApiError):
     """Exception for authentication errors."""
+
+
+class InimRateLimitError(InimApiError):
+    """Exception raised when INIM Cloud rate-limits or rejects for quota."""
 
 
 class InimApi:
@@ -87,6 +101,10 @@ class InimApi:
         
         try:
             async with session.get(url, headers=API_HEADERS) as response:
+                if response.status == 429:
+                    raise InimRateLimitError(
+                        "Rate limited by INIM Cloud (HTTP 429)", 429
+                    )
                 response.raise_for_status()
                 data = await response.json()
                 
@@ -101,13 +119,30 @@ class InimApi:
                         _LOGGER.debug("Token expired/invalid (code %s), invalidating token", error_code)
                         self._token = None
                         raise InimAuthError(error_msg, error_code)
+
+                    # Quota exhaustion can come back as a JSON error, not HTTP 429
+                    lowered = str(error_msg).lower()
+                    if "quota" in lowered or "too many" in lowered:
+                        raise InimRateLimitError(error_msg, error_code)
                     
                     raise InimApiError(error_msg, error_code)
                 
                 return data
                 
+        # "from None" keeps the original exception (whose str/repr includes
+        # the full request URL) out of the logged traceback.
+        except aiohttp.ClientResponseError as err:
+            if err.status == 429:
+                raise InimRateLimitError(
+                    "Rate limited by INIM Cloud (HTTP 429)", 429
+                ) from None
+            raise InimApiError(
+                f"HTTP {err.status}: {_redact(str(err.message))}", err.status
+            ) from None
         except aiohttp.ClientError as err:
-            raise InimApiError(f"Connection error: {err}") from err
+            raise InimApiError(
+                f"Connection error: {type(err).__name__}: {_redact(str(err))}"
+            ) from None
 
     async def authenticate(self) -> bool:
         """Authenticate with INIM Cloud and get token."""

@@ -8,6 +8,10 @@ DOMAIN = "inim_alarm"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
+# How often RequestPoll asks the panel to push fresh data to INIM Cloud.
+# Throttled separately from scan_interval because INIM Cloud rate-limits
+# RequestPoll (~250 calls/day; per device or per account is unconfirmed), while GetDevicesExtended is not.
+CONF_REQUEST_POLL_INTERVAL = "request_poll_interval"
 # Optional scenario mapping for the main panel. When set, the corresponding
 # arm/disarm action activates that panel scenario instead of arming every area
 # the same way via InsertAreas. This lets Armed Home map to a partial/night
@@ -48,6 +52,10 @@ METHOD_INSERT_ZONE = "InsertZone"
 
 # Default values
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
+DEFAULT_REQUEST_POLL_INTERVAL_SECONDS = 450
+REQUEST_POLL_RATE_LIMIT_INITIAL_BACKOFF = timedelta(minutes=30)
+REQUEST_POLL_RATE_LIMIT_MAX_BACKOFF = timedelta(hours=4)
+REQUEST_POLL_ISSUE_PREFIX = "request_poll_rate_limited_"
 DEFAULT_CLIENT_NAME = "HomeAssistant"
 
 # Zone Status (from API, subtract 1 for binary state)
